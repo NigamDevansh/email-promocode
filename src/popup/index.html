@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Inbox Coupon Assistant</title>
+    <link rel="stylesheet" href="./popup.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Inbox Coupon Assistant</h1>
+      <p id="status" role="status">Checking Google access…</p>
+    </header>
+
+    <button id="connect" type="button" hidden>Connect Google</button>
+    <button id="refresh" type="button" hidden>Refresh</button>
+
+    <ul id="messages"></ul>
+
+    <script type="module" src="./popup.ts"></script>
+  </body>
+</html>

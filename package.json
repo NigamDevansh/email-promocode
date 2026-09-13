@@ -1,0 +1,25 @@
+{
+  "name": "inbox-coupon-assistant",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "vite build --watch --mode development",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import=tsx --test \"test/**/*.test.ts\"",
+    "check": "npm run typecheck && npm test",
+    "extension-id": "node --import=tsx scripts/extension-id.ts"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.2.9",
+    "@types/node": "^26.5.1",
+    "tsx": "^4.23.13",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.0"
+  }
+}

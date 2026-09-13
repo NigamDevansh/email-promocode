@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "Inbox Coupon Assistant",
+  "version": "0.1.0",
+  "description": "Reads your Gmail Promotions category and collects coupon codes into a local, searchable list.",
+  "minimum_chrome_version": "120",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA1ZzotTjO7pILSuioo/XbS+xNGLMjzl6xELkkA1GUyYvZKsPjWvlHbf2ZmF7wRqxTgufJF81ayJbJN9UwVhUKOhawuBw0dh3v7+vf07qCH3uMPlK+dfnWu4Xlx6Lf1LY/PQ6BWYVy1aUccGuQHtCR4j3huLx7q/gYohcbBRJ/HfY4FO3u5KhtxIy4SBMxDXhuoeEGg904hPMASdJi7nVfvzItvl27GxudmL4FOq1+cV6dLm5F3MExLG5Zbi3rxMnHD5CMWiYIKeAqhqVJXrY2Ps8EgB1/5L9X6NQ0JvFiHrZ2IsgklXj26BZiOxAoTWSp/xSpnBmh8VPhIbY1Vuyk+wIDAQAB",
+  "permissions": ["identity", "storage"],
+  "host_permissions": ["https://gmail.googleapis.com/*"],
+  "oauth2": {
+    "client_id": "${GOOGLE_CLIENT_ID}",
+    "scopes": ["https://www.googleapis.com/auth/gmail.readonly"]
+  },
+  "background": {
+    "service_worker": "assets/background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "popup/index.html",
+    "default_title": "Inbox Coupon Assistant"
+  }
+}

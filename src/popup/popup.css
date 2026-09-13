@@ -1,0 +1,62 @@
+:root {
+  color-scheme: light dark;
+  --border: color-mix(in srgb, currentColor 15%, transparent);
+  --muted: color-mix(in srgb, currentColor 60%, transparent);
+}
+
+body {
+  width: 380px;
+  max-height: 520px;
+  margin: 0;
+  padding: 12px 14px;
+  overflow-y: auto;
+  font: 13px/1.45 system-ui, sans-serif;
+}
+
+h1 {
+  margin: 0;
+  font-size: 14px;
+}
+
+#status {
+  margin: 4px 0 10px;
+  color: var(--muted);
+}
+
+button {
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+button:hover {
+  background: var(--border);
+}
+
+ul {
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+}
+
+.subject {
+  font-weight: 500;
+}
+
+.meta {
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
