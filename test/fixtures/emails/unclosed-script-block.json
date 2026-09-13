@@ -1,0 +1,43 @@
+{
+  "description": "an unclosed script block must not spill its body into visible text",
+  "message": {
+    "id": "script01",
+    "threadId": "thread-script01",
+    "internalDate": "1757730000000",
+    "labelIds": [
+      "CATEGORY_PROMOTIONS",
+      "INBOX"
+    ],
+    "payload": {
+      "mimeType": "text/html",
+      "headers": [
+        {
+          "name": "From",
+          "value": "Broken <mail@e.broken.example>"
+        },
+        {
+          "name": "Subject",
+          "value": "Weekly digest"
+        },
+        {
+          "name": "Date",
+          "value": "Sat, 13 Sep 2025 02:20:00 GMT"
+        },
+        {
+          "name": "Content-Type",
+          "value": "text/html; charset=\"utf-8\""
+        }
+      ],
+      "body": {
+        "size": 71,
+        "data": "PHA-QnJvd3NlIHRoZSBuZXcgcmFuZ2UuPC9wPjxzY3JpcHQ-dmFyIHRyYWNraW5nID0gIlVzZSBjb2RlIFNDUklQVDk5Ijs"
+      }
+    }
+  },
+  "expected": {
+    "senderDomain": "e.broken.example",
+    "candidates": [],
+    "hasTriggerPhrase": false,
+    "shouldExtract": false
+  }
+}

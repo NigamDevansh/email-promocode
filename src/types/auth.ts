@@ -10,3 +10,9 @@ export interface AuthorizedFetchDeps {
   /** Persists `reauth_required` so scheduled sync can stop. */
   onReauthRequired: () => Promise<void>
 }
+
+export interface TokenRequest {
+  token: string | null
+  /** chrome.runtime.lastError, preserved so the popup can say what failed. */
+  error: string | null
+}

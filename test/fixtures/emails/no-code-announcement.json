@@ -1,0 +1,43 @@
+{
+  "description": "plain announcement with no offer language at all: cache as no-code and stop",
+  "message": {
+    "id": "none01",
+    "threadId": "thread-none01",
+    "internalDate": "1757700000000",
+    "labelIds": [
+      "CATEGORY_PROMOTIONS",
+      "INBOX"
+    ],
+    "payload": {
+      "mimeType": "text/plain",
+      "headers": [
+        {
+          "name": "From",
+          "value": "Studio <hello@mail.studio.example>"
+        },
+        {
+          "name": "Subject",
+          "value": "New arrivals are here"
+        },
+        {
+          "name": "Date",
+          "value": "Fri, 12 Sep 2025 18:00:00 GMT"
+        },
+        {
+          "name": "Content-Type",
+          "value": "text/plain; charset=\"utf-8\""
+        }
+      ],
+      "body": {
+        "size": 77,
+        "data": "T3VyIGxhdGVzdCBjb2xsZWN0aW9uIGp1c3QgbGFuZGVkLiBFeHBsb3JlIHRoZSBuZXcgc2Vhc29uIGluIHN0b3JlIG9yIG9ubGluZS4"
+      }
+    }
+  },
+  "expected": {
+    "senderDomain": "mail.studio.example",
+    "candidates": [],
+    "hasTriggerPhrase": false,
+    "shouldExtract": false
+  }
+}

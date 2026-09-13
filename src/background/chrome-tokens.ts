@@ -1,4 +1,4 @@
-import type { TokenPort } from '../types/auth.js'
+import type { TokenPort, TokenRequest } from '../types/auth.js'
 
 /*
  * The only Chrome Identity binding in the codebase. Kept apart from auth.ts so
@@ -18,17 +18,20 @@ interface IdentityApi {
 
 const identity = chrome.identity as unknown as IdentityApi
 
-export const chromeTokens: TokenPort = {
-  get(interactive) {
-    return new Promise((resolve) => {
-      identity.getAuthToken({ interactive }, (result) => {
-        if (chrome.runtime.lastError || !result) {
-          resolve(null)
-          return
-        }
-        resolve(typeof result === 'string' ? result : (result.token ?? null))
-      })
+
+export function requestAuthToken(interactive: boolean): Promise<TokenRequest> {
+  return new Promise((resolve) => {
+    identity.getAuthToken({ interactive }, (result) => {
+      const error = chrome.runtime.lastError?.message ?? null
+      const token = typeof result === 'string' ? result : (result?.token ?? null)
+      resolve({ token: error ? null : token, error })
     })
+  })
+}
+
+export const chromeTokens: TokenPort = {
+  async get(interactive) {
+    return (await requestAuthToken(interactive)).token
   },
   remove(token) {
     return new Promise((resolve, reject) => {

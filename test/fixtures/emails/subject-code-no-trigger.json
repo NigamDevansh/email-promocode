@@ -1,0 +1,45 @@
+{
+  "description": "code lives in the subject with no trigger phrase anywhere: candidates alone open the gate",
+  "message": {
+    "id": "subj01",
+    "threadId": "thread-subj01",
+    "internalDate": "1757630000000",
+    "labelIds": [
+      "CATEGORY_PROMOTIONS",
+      "INBOX"
+    ],
+    "payload": {
+      "mimeType": "text/plain",
+      "headers": [
+        {
+          "name": "From",
+          "value": "Example <promo@mail.example.com>"
+        },
+        {
+          "name": "Subject",
+          "value": "Your FLAT300 reward is waiting"
+        },
+        {
+          "name": "Date",
+          "value": "Thu, 11 Sep 2025 22:33:20 GMT"
+        },
+        {
+          "name": "Content-Type",
+          "value": "text/plain; charset=\"utf-8\""
+        }
+      ],
+      "body": {
+        "size": 44,
+        "data": "UmVkZWVtIGl0IGF0IGNoZWNrb3V0IGJlZm9yZSB0aGUgbW9udGggZW5kcy4"
+      }
+    }
+  },
+  "expected": {
+    "senderDomain": "mail.example.com",
+    "candidates": [
+      "FLAT300"
+    ],
+    "hasTriggerPhrase": false,
+    "shouldExtract": true
+  }
+}

@@ -68,7 +68,7 @@ connectEl.addEventListener('click', async () => {
     await loadMessages()
     return
   }
-  showDisconnected('Connection cancelled. Try again when ready.')
+  showDisconnected(response.ok ? 'Connection did not complete.' : response.error)
 })
 
 refreshEl.addEventListener('click', () => {

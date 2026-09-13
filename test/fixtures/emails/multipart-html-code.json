@@ -1,0 +1,68 @@
+{
+  "description": "multipart/alternative; the text/plain part is preferred over stripped HTML",
+  "message": {
+    "id": "multi01",
+    "threadId": "thread-multi01",
+    "internalDate": "1757610000000",
+    "labelIds": [
+      "CATEGORY_PROMOTIONS",
+      "INBOX"
+    ],
+    "payload": {
+      "mimeType": "multipart/alternative",
+      "body": {
+        "size": 0
+      },
+      "parts": [
+        {
+          "mimeType": "text/plain",
+          "headers": [
+            {
+              "name": "Content-Type",
+              "value": "text/plain; charset=\"utf-8\""
+            }
+          ],
+          "body": {
+            "size": 39,
+            "data": "VXNlIGNvZGUgV0VMQ09NRTE1IG9uIHlvdXIgZmlyc3Qgb3JkZXIu"
+          }
+        },
+        {
+          "mimeType": "text/html",
+          "headers": [
+            {
+              "name": "Content-Type",
+              "value": "text/html; charset=\"utf-8\""
+            }
+          ],
+          "body": {
+            "size": 89,
+            "data": "PGh0bWw-PGJvZHk-PHA-VXNlIGNvZGUgPHN0cm9uZz5XRUxDT01FMTU8L3N0cm9uZz4gb24geW91ciBmaXJzdCBvcmRlci48L3A-PC9ib2R5PjwvaHRtbD4"
+          }
+        }
+      ],
+      "headers": [
+        {
+          "name": "From",
+          "value": "\"Brandy\" <news@deals.brandy.co.uk>"
+        },
+        {
+          "name": "Subject",
+          "value": "A gift for you"
+        },
+        {
+          "name": "Date",
+          "value": "Thu, 11 Sep 2025 17:00:00 GMT"
+        }
+      ]
+    }
+  },
+  "expected": {
+    "senderDomain": "deals.brandy.co.uk",
+    "candidates": [
+      "WELCOME15"
+    ],
+    "hasTriggerPhrase": true,
+    "shouldExtract": true
+  }
+}

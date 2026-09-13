@@ -1,0 +1,45 @@
+{
+  "description": "coupon carried as a direct query parameter, with single-quoted attributes",
+  "message": {
+    "id": "link01",
+    "threadId": "thread-link01",
+    "internalDate": "1757650000000",
+    "labelIds": [
+      "CATEGORY_PROMOTIONS",
+      "INBOX"
+    ],
+    "payload": {
+      "mimeType": "text/html",
+      "headers": [
+        {
+          "name": "From",
+          "value": "Festive <mailer@e.retailer.com>"
+        },
+        {
+          "name": "Subject",
+          "value": "Festive savings inside"
+        },
+        {
+          "name": "Date",
+          "value": "Fri, 12 Sep 2025 04:06:40 GMT"
+        },
+        {
+          "name": "Content-Type",
+          "value": "text/html; charset=\"utf-8\""
+        }
+      ],
+      "body": {
+        "size": 84,
+        "data": "PGEgaHJlZj0naHR0cHM6Ly90cmFjay5lLnJldGFpbGVyLmNvbS9jP2NvdXBvbj1GRVNUMjUmdXRtX3NvdXJjZT1lbWFpbCc-U2hvcCBub3c8L2E-"
+      }
+    }
+  },
+  "expected": {
+    "senderDomain": "e.retailer.com",
+    "candidates": [
+      "FEST25"
+    ],
+    "hasTriggerPhrase": false,
+    "shouldExtract": true
+  }
+}

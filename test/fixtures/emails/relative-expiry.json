@@ -1,0 +1,45 @@
+{
+  "description": "relative expiry language, which §8 leaves for the LLM to resolve against the email date",
+  "message": {
+    "id": "rel01",
+    "threadId": "thread-rel01",
+    "internalDate": "1757680000000",
+    "labelIds": [
+      "CATEGORY_PROMOTIONS",
+      "INBOX"
+    ],
+    "payload": {
+      "mimeType": "text/plain",
+      "headers": [
+        {
+          "name": "From",
+          "value": "Cafe <hi@mail.cafe.example>"
+        },
+        {
+          "name": "Subject",
+          "value": "Ends soon"
+        },
+        {
+          "name": "Date",
+          "value": "Fri, 12 Sep 2025 12:26:40 GMT"
+        },
+        {
+          "name": "Content-Type",
+          "value": "text/plain; charset=\"utf-8\""
+        }
+      ],
+      "body": {
+        "size": 72,
+        "data": "WW91ciAzLWRheSB3aW5kb3cgaXMgb3Blbi4gVXNlIGNvZGUgUkFJTjIwIG5vdy4gT2ZmZXIgdmFsaWQgdGlsbCBTdW5kYXku"
+      }
+    }
+  },
+  "expected": {
+    "senderDomain": "mail.cafe.example",
+    "candidates": [
+      "RAIN20"
+    ],
+    "hasTriggerPhrase": true,
+    "shouldExtract": true
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "description": "uppercase marketing boilerplate only: the blocklist and shape filter must reject all of it",
+  "message": {
+    "id": "fp01",
+    "threadId": "thread-fp01",
+    "internalDate": "1757690000000",
+    "labelIds": [
+      "CATEGORY_PROMOTIONS",
+      "INBOX"
+    ],
+    "payload": {
+      "mimeType": "text/html",
+      "headers": [
+        {
+          "name": "From",
+          "value": "News <news@mail.example.org>"
+        },
+        {
+          "name": "Subject",
+          "value": "This week at Example"
+        },
+        {
+          "name": "Date",
+          "value": "Fri, 12 Sep 2025 15:13:20 GMT"
+        },
+        {
+          "name": "Content-Type",
+          "value": "text/html; charset=\"utf-8\""
+        }
+      ],
+      "body": {
+        "size": 175,
+        "data": "PHA-U0hPUCBOT1c8L3A-PHA-RlJFRSBTSElQUElORyBPTiBBTEwgT1JERVJTPC9wPjxhIGhyZWY9Imh0dHBzOi8vZXhhbXBsZS5vcmcvdSI-VU5TVUJTQ1JJQkU8L2E-IHwgPGEgaHJlZj0iaHR0cHM6Ly9leGFtcGxlLm9yZy9wIj5QUklWQUNZIFBPTElDWTwvYT4gfCBWSUVXIElOIEJST1dTRVIgfCBURVJNUw"
+      }
+    }
+  },
+  "expected": {
+    "senderDomain": "mail.example.org",
+    "candidates": [],
+    "hasTriggerPhrase": false,
+    "shouldExtract": false
+  }
+}

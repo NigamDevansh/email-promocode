@@ -1,0 +1,46 @@
+{
+  "description": "data-alt and data-href must not be read as alt and href (\\b treats \"-\" as a boundary)",
+  "message": {
+    "id": "decoy01",
+    "threadId": "thread-decoy01",
+    "internalDate": "1757710000000",
+    "labelIds": [
+      "CATEGORY_PROMOTIONS",
+      "INBOX"
+    ],
+    "payload": {
+      "mimeType": "text/html",
+      "headers": [
+        {
+          "name": "From",
+          "value": "Shop <mail@e.decoy.example>"
+        },
+        {
+          "name": "Subject",
+          "value": "Seasonal picks"
+        },
+        {
+          "name": "Date",
+          "value": "Fri, 12 Sep 2025 20:46:40 GMT"
+        },
+        {
+          "name": "Content-Type",
+          "value": "text/html; charset=\"utf-8\""
+        }
+      ],
+      "body": {
+        "size": 224,
+        "data": "PGltZyBkYXRhLWFsdD0iVXNlIGNvZGUgREVDT1lBTFQ5OSIgc3JjPSJodHRwczovL2Nkbi5kZWNveS5leGFtcGxlL2EuanBnIiBhbHQ9IlVzZSBjb2RlIFJFQUxBTFQyMCB0b2RheSI-PGEgZGF0YS1ocmVmPSJodHRwczovL3guZGVjb3kuZXhhbXBsZS9jP2NvdXBvbj1ERUNPWUxJTks4OCIgaHJlZj0iaHR0cHM6Ly94LmRlY295LmV4YW1wbGUvYz9jb3Vwb249UkVBTExJTkszMCI-U2hvcDwvYT4"
+      }
+    }
+  },
+  "expected": {
+    "senderDomain": "e.decoy.example",
+    "candidates": [
+      "REALLINK30",
+      "REALALT20"
+    ],
+    "hasTriggerPhrase": true,
+    "shouldExtract": true
+  }
+}

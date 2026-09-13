@@ -1,0 +1,43 @@
+{
+  "description": "all-caps headline words with no coupon language must not open the gate",
+  "message": {
+    "id": "caps01",
+    "threadId": "thread-caps01",
+    "internalDate": "1757760000000",
+    "labelIds": [
+      "CATEGORY_PROMOTIONS",
+      "INBOX"
+    ],
+    "payload": {
+      "mimeType": "text/html",
+      "headers": [
+        {
+          "name": "From",
+          "value": "Label <news@mail.caps.example>"
+        },
+        {
+          "name": "Subject",
+          "value": "AUTUMN FASHION REWARDS"
+        },
+        {
+          "name": "Date",
+          "value": "Sat, 13 Sep 2025 10:40:00 GMT"
+        },
+        {
+          "name": "Content-Type",
+          "value": "text/html; charset=\"utf-8\""
+        }
+      ],
+      "body": {
+        "size": 89,
+        "data": "PGgxPkFVVFVNTiBGQVNISU9OIFJFV0FSRFM8L2gxPjxwPkRJU0NPVkVSIFRIRSBTRUFTT04gQ09MTEVDVElPTiBJTiBTVE9SRVMgTkFUSU9OV0lERTwvcD4"
+      }
+    }
+  },
+  "expected": {
+    "senderDomain": "mail.caps.example",
+    "candidates": [],
+    "hasTriggerPhrase": false,
+    "shouldExtract": false
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "description": "text/plain only, trigger phrase directly before the code",
+  "message": {
+    "id": "plain01",
+    "threadId": "thread-plain01",
+    "internalDate": "1757600000000",
+    "labelIds": [
+      "CATEGORY_PROMOTIONS",
+      "INBOX"
+    ],
+    "payload": {
+      "mimeType": "text/plain",
+      "headers": [
+        {
+          "name": "From",
+          "value": "Offers <offers@mail.examplestore.com>"
+        },
+        {
+          "name": "Subject",
+          "value": "Your weekend treat"
+        },
+        {
+          "name": "Date",
+          "value": "Thu, 11 Sep 2025 14:13:20 GMT"
+        },
+        {
+          "name": "Content-Type",
+          "value": "text/plain; charset=\"utf-8\""
+        }
+      ],
+      "body": {
+        "size": 71,
+        "data": "SGkgdGhlcmUhCgpVc2UgY29kZSBTQVZFMjAgZm9yIDIwJSBvZmYgZXZlcnl0aGluZy4KVmFsaWQgdGlsbCAzMCBTZXB0Lgo"
+      }
+    }
+  },
+  "expected": {
+    "senderDomain": "mail.examplestore.com",
+    "candidates": [
+      "SAVE20"
+    ],
+    "hasTriggerPhrase": true,
+    "shouldExtract": true
+  }
+}

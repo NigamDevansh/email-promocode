@@ -1,0 +1,45 @@
+{
+  "description": "coupon behind one level of ESP redirect, url-encoded",
+  "message": {
+    "id": "link02",
+    "threadId": "thread-link02",
+    "internalDate": "1757660000000",
+    "labelIds": [
+      "CATEGORY_PROMOTIONS",
+      "INBOX"
+    ],
+    "payload": {
+      "mimeType": "text/html",
+      "headers": [
+        {
+          "name": "From",
+          "value": "Shop <no-reply@esp.example.net>"
+        },
+        {
+          "name": "Subject",
+          "value": "Big weekend"
+        },
+        {
+          "name": "Date",
+          "value": "Fri, 12 Sep 2025 06:53:20 GMT"
+        },
+        {
+          "name": "Content-Type",
+          "value": "text/html; charset=\"utf-8\""
+        }
+      ],
+      "body": {
+        "size": 120,
+        "data": "PGEgaHJlZj0iaHR0cHM6Ly9jbGljay5lc3AuZXhhbXBsZS5uZXQvcj91PWh0dHBzJTNBJTJGJTJGc2hvcC5leGFtcGxlLmNvbSUyRnNhbGUlM0Zwcm9tbyUzREJJRzUwJTI2cmVmJTNEZW1haWwiPk9wZW48L2E-"
+      }
+    }
+  },
+  "expected": {
+    "senderDomain": "esp.example.net",
+    "candidates": [
+      "BIG50"
+    ],
+    "hasTriggerPhrase": false,
+    "shouldExtract": true
+  }
+}

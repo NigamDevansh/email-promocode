@@ -1,0 +1,45 @@
+{
+  "description": "rupee amounts as numeric entities; bare numbers must not become candidates",
+  "message": {
+    "id": "inr01",
+    "threadId": "thread-inr01",
+    "internalDate": "1757670000000",
+    "labelIds": [
+      "CATEGORY_PROMOTIONS",
+      "INBOX"
+    ],
+    "payload": {
+      "mimeType": "text/html",
+      "headers": [
+        {
+          "name": "From",
+          "value": "Ajio <offers@mail.ajio.com>"
+        },
+        {
+          "name": "Subject",
+          "value": "Flat savings today"
+        },
+        {
+          "name": "Date",
+          "value": "Fri, 12 Sep 2025 09:40:00 GMT"
+        },
+        {
+          "name": "Content-Type",
+          "value": "text/html; charset=\"utf-8\""
+        }
+      ],
+      "body": {
+        "size": 90,
+        "data": "PHA-RmxhdCAmIzgzNzc7NTAwIG9mZiBvbiBvcmRlcnMgYWJvdmUgJiM4Mzc3OzI0OTkuPC9wPjxwPlVzZSBjb2RlIElOUjUwMCBhdCBjaGVja291dC48L3A-"
+      }
+    }
+  },
+  "expected": {
+    "senderDomain": "mail.ajio.com",
+    "candidates": [
+      "INR500"
+    ],
+    "hasTriggerPhrase": true,
+    "shouldExtract": true
+  }
+}

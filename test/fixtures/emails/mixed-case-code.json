@@ -1,0 +1,45 @@
+{
+  "description": "a mixed-case code counts when it has a digit and follows coupon language",
+  "message": {
+    "id": "mixed01",
+    "threadId": "thread-mixed01",
+    "internalDate": "1757750000000",
+    "labelIds": [
+      "CATEGORY_PROMOTIONS",
+      "INBOX"
+    ],
+    "payload": {
+      "mimeType": "text/plain",
+      "headers": [
+        {
+          "name": "From",
+          "value": "Cafe <hello@mail.mixed.example>"
+        },
+        {
+          "name": "Subject",
+          "value": "Treat yourself"
+        },
+        {
+          "name": "Date",
+          "value": "Sat, 13 Sep 2025 07:53:20 GMT"
+        },
+        {
+          "name": "Content-Type",
+          "value": "text/plain; charset=\"utf-8\""
+        }
+      ],
+      "body": {
+        "size": 55,
+        "data": "UG9wIGluIHRoaXMgd2Vla2VuZCBhbmQgdXNlIGNvZGUgU2F2ZTIwIGF0IHRoZSBjb3VudGVyLg"
+      }
+    }
+  },
+  "expected": {
+    "senderDomain": "mail.mixed.example",
+    "candidates": [
+      "SAVE20"
+    ],
+    "hasTriggerPhrase": true,
+    "shouldExtract": true
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "description": "image-only banner carrying its own code in alt text",
+  "message": {
+    "id": "alt01",
+    "threadId": "thread-alt01",
+    "internalDate": "1757640000000",
+    "labelIds": [
+      "CATEGORY_PROMOTIONS",
+      "INBOX"
+    ],
+    "payload": {
+      "mimeType": "text/html",
+      "headers": [
+        {
+          "name": "From",
+          "value": "Myntra <offers@mail.myntra.com>"
+        },
+        {
+          "name": "Subject",
+          "value": "Monsoon sale is live"
+        },
+        {
+          "name": "Date",
+          "value": "Fri, 12 Sep 2025 01:20:00 GMT"
+        },
+        {
+          "name": "Content-Type",
+          "value": "text/html; charset=\"utf-8\""
+        }
+      ],
+      "body": {
+        "size": 162,
+        "data": "PGh0bWw-PGJvZHk-PGEgaHJlZj0iaHR0cHM6Ly93d3cubXludHJhLmNvbS9zYWxlIj48aW1nIHNyYz0iaHR0cHM6Ly9jZG4ubXludHJhLmNvbS9iYW5uZXIuanBnIiBhbHQ9IlVzZSBjb2RlIE1PTlNPT040MCBmb3IgNDAlIG9mZiIgd2lkdGg9IjYwMCI-PC9hPjwvYm9keT48L2h0bWw-"
+      }
+    }
+  },
+  "expected": {
+    "senderDomain": "mail.myntra.com",
+    "candidates": [
+      "MONSOON40"
+    ],
+    "hasTriggerPhrase": true,
+    "shouldExtract": true
+  }
+}

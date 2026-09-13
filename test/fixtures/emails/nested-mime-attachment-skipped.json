@@ -1,0 +1,99 @@
+{
+  "description": "mixed > related > alternative, with an attachment whose decoy code must be ignored",
+  "message": {
+    "id": "nested01",
+    "threadId": "thread-nested01",
+    "internalDate": "1757620000000",
+    "labelIds": [
+      "CATEGORY_PROMOTIONS",
+      "INBOX"
+    ],
+    "payload": {
+      "mimeType": "multipart/mixed",
+      "body": {
+        "size": 0
+      },
+      "parts": [
+        {
+          "mimeType": "multipart/related",
+          "body": {
+            "size": 0
+          },
+          "parts": [
+            {
+              "mimeType": "multipart/alternative",
+              "body": {
+                "size": 0
+              },
+              "parts": [
+                {
+                  "mimeType": "text/plain",
+                  "headers": [
+                    {
+                      "name": "Content-Type",
+                      "value": "text/plain; charset=\"utf-8\""
+                    }
+                  ],
+                  "body": {
+                    "size": 32,
+                    "data": "VXNlIGNvZGUgTkVTVEVEMzAgYmVmb3JlIEZyaWRheS4"
+                  }
+                },
+                {
+                  "mimeType": "text/html",
+                  "headers": [
+                    {
+                      "name": "Content-Type",
+                      "value": "text/html; charset=\"utf-8\""
+                    }
+                  ],
+                  "body": {
+                    "size": 43,
+                    "data": "PGRpdj5Vc2UgY29kZSBORVNURUQzMCBiZWZvcmUgRnJpZGF5LjwvZGl2Pg"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "mimeType": "text/plain",
+          "filename": "terms.txt",
+          "headers": [
+            {
+              "name": "Content-Disposition",
+              "value": "attachment; filename=\"terms.txt\""
+            }
+          ],
+          "body": {
+            "attachmentId": "att-1",
+            "size": 20,
+            "data": "VXNlIGNvZGUgREVDT1k5OSBub3c"
+          }
+        }
+      ],
+      "headers": [
+        {
+          "name": "From",
+          "value": "Store <hello@shop.example.in>"
+        },
+        {
+          "name": "Subject",
+          "value": "Inside: your offer"
+        },
+        {
+          "name": "Date",
+          "value": "Thu, 11 Sep 2025 19:46:40 GMT"
+        }
+      ]
+    }
+  },
+  "expected": {
+    "senderDomain": "shop.example.in",
+    "candidates": [
+      "NESTED30"
+    ],
+    "hasTriggerPhrase": true,
+    "shouldExtract": true
+  }
+}

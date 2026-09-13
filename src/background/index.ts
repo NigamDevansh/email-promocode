@@ -4,7 +4,7 @@ import {
   authStateForError,
   ReauthRequiredError,
 } from './auth.js'
-import { chromeTokens } from './chrome-tokens.js'
+import { chromeTokens, requestAuthToken } from './chrome-tokens.js'
 import { listPromotionSummaries } from './gmail.js'
 import { readAuthState, writeAuthState } from './state.js'
 
@@ -32,11 +32,20 @@ async function currentAuthState(): Promise<AuthState> {
 }
 
 /** Interactive auth runs only from the Connect gesture in the popup. */
-async function connect(): Promise<AuthState> {
-  const token = await chromeTokens.get(true)
-  const state: AuthState = token ? 'connected' : 'disconnected'
-  await writeAuthState(state)
-  return state
+async function connect(): Promise<PopupResponse> {
+  const { token, error } = await requestAuthToken(true)
+
+  if (token) {
+    await writeAuthState('connected')
+    return { ok: true, authState: 'connected' }
+  }
+
+  await writeAuthState('disconnected')
+  return {
+    ok: false,
+    authState: 'disconnected',
+    error: error ?? 'Google sign-in was dismissed before it completed.',
+  }
 }
 
 async function handle(request: PopupRequest): Promise<PopupResponse> {
@@ -45,7 +54,7 @@ async function handle(request: PopupRequest): Promise<PopupResponse> {
       return { ok: true, authState: await currentAuthState() }
 
     case 'connect':
-      return { ok: true, authState: await connect() }
+      return await connect()
 
     case 'list-messages': {
       if ((await readAuthState()) === 'reauth_required') {

@@ -1,0 +1,101 @@
+{
+  "description": "a forwarded message/rfc822 attachment must not leak its nested text parts",
+  "message": {
+    "id": "fwd01",
+    "threadId": "thread-fwd01",
+    "internalDate": "1757720000000",
+    "labelIds": [
+      "CATEGORY_PROMOTIONS",
+      "INBOX"
+    ],
+    "payload": {
+      "mimeType": "multipart/mixed",
+      "body": {
+        "size": 0
+      },
+      "parts": [
+        {
+          "mimeType": "text/plain",
+          "headers": [
+            {
+              "name": "Content-Type",
+              "value": "text/plain; charset=\"utf-8\""
+            }
+          ],
+          "body": {
+            "size": 59,
+            "data": "VGhhbmtzIGZvciB3cml0aW5nIGluLiBVc2UgY29kZSBSRVBMWTI1IG9uIHlvdXIgbmV4dCBvcmRlci4"
+          }
+        },
+        {
+          "mimeType": "message/rfc822",
+          "filename": "forwarded.eml",
+          "headers": [
+            {
+              "name": "Content-Disposition",
+              "value": "attachment; filename=\"forwarded.eml\""
+            }
+          ],
+          "parts": [
+            {
+              "mimeType": "multipart/alternative",
+              "body": {
+                "size": 0
+              },
+              "parts": [
+                {
+                  "mimeType": "text/plain",
+                  "headers": [
+                    {
+                      "name": "Content-Type",
+                      "value": "text/plain; charset=\"utf-8\""
+                    }
+                  ],
+                  "body": {
+                    "size": 43,
+                    "data": "VXNlIGNvZGUgQVRUQUNINzcgZnJvbSB0aGUgYXR0YWNoZWQgdGhyZWFkLg"
+                  }
+                },
+                {
+                  "mimeType": "text/html",
+                  "headers": [
+                    {
+                      "name": "Content-Type",
+                      "value": "text/html; charset=\"utf-8\""
+                    }
+                  ],
+                  "body": {
+                    "size": 34,
+                    "data": "PHA-VXNlIGNvZGUgQVRUQUNISFRNTDg4IGhlcmUuPC9wPg"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "headers": [
+        {
+          "name": "From",
+          "value": "Desk <help@mail.fwd.example>"
+        },
+        {
+          "name": "Subject",
+          "value": "Your enquiry"
+        },
+        {
+          "name": "Date",
+          "value": "Fri, 12 Sep 2025 23:33:20 GMT"
+        }
+      ]
+    }
+  },
+  "expected": {
+    "senderDomain": "mail.fwd.example",
+    "candidates": [
+      "REPLY25"
+    ],
+    "hasTriggerPhrase": true,
+    "shouldExtract": true
+  }
+}
