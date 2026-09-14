@@ -1,23 +1,7 @@
-import type { TokenPort, TokenRequest } from '../types/auth.js'
+import type { IdentityApi, TokenPort, TokenRequest } from '../types/auth.js'
 
-/*
- * The only Chrome Identity binding in the codebase. Kept apart from auth.ts so
- * the retry policy there stays importable in Node tests.
- *
- * @types/chrome has changed the getAuthToken callback shape across releases
- * (a bare string, then a result object). Narrowing it here keeps the build from
- * depending on which one is installed.
- */
-interface IdentityApi {
-  getAuthToken(
-    details: { interactive: boolean },
-    callback: (result: string | { token?: string } | undefined) => void,
-  ): void
-  removeCachedAuthToken(details: { token: string }, callback: () => void): void
-}
-
+/** Chrome Identity adapter; the auth retry policy stays browser-independent. */
 const identity = chrome.identity as unknown as IdentityApi
-
 
 export function requestAuthToken(interactive: boolean): Promise<TokenRequest> {
   return new Promise((resolve) => {

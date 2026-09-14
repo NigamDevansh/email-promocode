@@ -16,3 +16,12 @@ export interface TokenRequest {
   /** chrome.runtime.lastError, preserved so the popup can say what failed. */
   error: string | null
 }
+
+/** Narrow Chrome Identity surface used by the browser adapter. */
+export interface IdentityApi {
+  getAuthToken(
+    details: { interactive: boolean },
+    callback: (result: string | { token?: string } | undefined) => void,
+  ): void
+  removeCachedAuthToken(details: { token: string }, callback: () => void): void
+}

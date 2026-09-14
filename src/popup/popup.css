@@ -60,3 +60,82 @@ li {
   font-size: 12px;
   overflow-wrap: anywhere;
 }
+
+#search {
+  box-sizing: border-box;
+  width: 100%;
+  margin: 10px 0 0;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+
+.offer {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 9px 0;
+  border-top: 1px solid var(--border);
+}
+
+.offer-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.offer-code {
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: 600 13px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+}
+
+.offer-code:hover {
+  background: var(--border);
+}
+
+.offer-brand {
+  font-weight: 500;
+}
+
+.offer-meta,
+.offer-subject {
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.offer-expired .offer-code {
+  text-decoration: line-through;
+  opacity: 0.65;
+}
+
+.badge {
+  padding: 1px 5px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 11px;
+}
+
+#recent {
+  margin-top: 14px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+#recent summary {
+  cursor: pointer;
+  padding: 6px 0;
+}
+
+#offers-empty {
+  color: var(--muted);
+}

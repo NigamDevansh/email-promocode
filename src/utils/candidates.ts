@@ -1,4 +1,9 @@
-import type { Candidate, CandidateSource, GateResult } from '../types/extraction.js'
+import type {
+  Candidate,
+  CandidateSource,
+  GateResult,
+  TriggerContext,
+} from '../types/extraction.js'
 import type { ParsedMessage } from '../types/gmail.js'
 import { extractAltTexts, extractHrefs, extractVisibleText } from './html.js'
 
@@ -84,13 +89,6 @@ export function normalizeCode(code: string): string {
   return code.trim().toUpperCase()
 }
 
-interface TriggerContext {
-  /** Candidate starts just after a trigger phrase: "use code" then the code. */
-  afterTrigger: boolean
-  /** Within scoring distance of a trigger phrase in either direction. */
-  nearTrigger: boolean
-}
-
 /**
  * Decides whether a shape-matching token can be a coupon code.
  *
@@ -100,7 +98,12 @@ interface TriggerContext {
  * Mixed case (Save20) is a real but much rarer form, so it needs both a digit
  * and that language before it counts.
  */
-function isAcceptableCode(raw: string, normalized: string, source: CandidateSource, context: TriggerContext): boolean {
+function isAcceptableCode(
+  raw: string,
+  normalized: string,
+  source: CandidateSource,
+  context: TriggerContext,
+): boolean {
   if (BLOCKLIST.has(normalized)) return false
   if (!/[A-Z]/.test(normalized)) return false
   if (!/[A-Z0-9]$/.test(normalized)) return false
@@ -226,12 +229,16 @@ export function gateMessage(message: ParsedMessage): GateResult {
 
   collectFromText(candidates, message.subject, 'subject')
 
-  const body = message.text || extractVisibleText(message.html)
-  collectFromText(candidates, body, 'text')
+  // Both surfaces, never one or the other: a multipart/alternative message
+  // often carries a generic plain-text stub ("view this email in your browser")
+  // beside HTML that holds the actual code. The candidate map deduplicates.
+  const visible = extractVisibleText(message.html)
+  collectFromText(candidates, message.text, 'text')
+  collectFromText(candidates, visible, 'text')
 
   // Alt text counts here too: an image-only email whose banner says "use code"
   // must still reach the LLM even when no candidate survives the shape filter.
-  const hasTriggerPhrase = [message.subject, body, ...alts].some(
+  const hasTriggerPhrase = [message.subject, message.text, visible, ...alts].some(
     (haystack) => triggerOffsets(haystack).length > 0,
   )
 

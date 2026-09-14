@@ -1,9 +1,4 @@
-/*
- * §7 "HTML handling without a DOM": deliberately candidate extraction, not a
- * general-purpose HTML parser or sanitizer. Keeping these as pure string
- * functions is what lets phases 1-3 avoid an offscreen document entirely and
- * run the whole free extraction path under node:test.
- */
+/** Small, browser-independent scanners for promotional-email HTML. */
 
 const NAMED_ENTITIES: Readonly<Record<string, string>> = {
   amp: '&',
@@ -61,13 +56,21 @@ function attributeValues(html: string, tag: string, attribute: string): string[]
   )
   const values: string[] = []
 
-  for (const match of html.matchAll(pattern)) {
+  for (const match of stripNonContent(html).matchAll(pattern)) {
     const raw = match[1] ?? match[2] ?? match[3]
     if (raw === undefined) continue
     const value = decodeEntities(raw).trim()
     if (value) values.push(value)
   }
   return values
+}
+
+/** Removes markup that cannot contribute visible content or attributes. */
+function stripNonContent(html: string): string {
+  return html
+    .replace(/<!--[\s\S]*?(?:-->|$)/g, ' ')
+    .replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, ' ')
+    .replace(/<(script|style)\b[^>]*>[\s\S]*$/i, ' ')
 }
 
 /** Anchor targets, for the link-parameter stage. */
@@ -86,13 +89,7 @@ export function extractAltTexts(html: string): string[] {
  */
 export function extractVisibleText(html: string): string {
   return decodeEntities(
-    html
-      .replace(/<!--[\s\S]*?-->/g, ' ')
-      .replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, ' ')
-      // An unclosed script/style would otherwise have only its opening tag
-      // stripped, spilling its body into the visible text.
-      .replace(/<(script|style)\b[^>]*>[\s\S]*$/i, ' ')
-      .replace(/<[^>]+>/g, ' '),
+    stripNonContent(html).replace(/<[^>]+>/g, ' '),
   )
     .replace(/\s+/g, ' ')
     .trim()

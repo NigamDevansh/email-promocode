@@ -1,4 +1,12 @@
 import type { AuthorizedFetchDeps } from '../types/auth.js'
+import type {
+  GmailAttachmentResponse,
+  GmailListResponse,
+  GmailMessage,
+  GmailMessageRef,
+  GmailMetadataResponse,
+  GmailPort,
+} from '../types/gmail.js'
 import type { MessageSummary } from '../types/messaging.js'
 import { mapWithConcurrency } from '../utils/concurrency.js'
 import { authorizedFetch } from './auth.js'
@@ -11,28 +19,22 @@ export const BACKFILL_DAYS = 45
 /** §6: start conservatively; raise only if measured sync time demands it. */
 const FETCH_CONCURRENCY = 5
 
-interface MessageRef {
-  id: string
-  threadId: string
-}
-
-interface ListResponse {
-  messages?: MessageRef[]
-  nextPageToken?: string
-}
-
-interface MetadataResponse {
-  id: string
-  threadId: string
-  internalDate?: string
-  payload?: { headers?: { name: string; value: string }[] }
+export class GmailApiError extends Error {
+  constructor(
+    readonly status: number,
+    readonly path: string,
+    detail: string,
+  ) {
+    super(`Gmail ${status} on ${path}${detail ? `: ${detail.slice(0, 200)}` : ''}`)
+    this.name = 'GmailApiError'
+  }
 }
 
 async function gmailJson<T>(path: string, deps: AuthorizedFetchDeps): Promise<T> {
   const response = await authorizedFetch(`${GMAIL_BASE}${path}`, deps)
   if (!response.ok) {
     const body = await response.text().catch(() => '')
-    throw new Error(`Gmail ${response.status} on ${path}${body ? `: ${body.slice(0, 200)}` : ''}`)
+    throw new GmailApiError(response.status, path, body)
   }
   return (await response.json()) as T
 }
@@ -44,19 +46,19 @@ async function gmailJson<T>(path: string, deps: AuthorizedFetchDeps): Promise<T>
 export async function listPromotionMessageRefs(
   deps: AuthorizedFetchDeps,
   maxResults: number,
-): Promise<MessageRef[]> {
+): Promise<GmailMessageRef[]> {
   const query = new URLSearchParams({
     labelIds: 'CATEGORY_PROMOTIONS',
     q: `newer_than:${BACKFILL_DAYS}d`,
     maxResults: String(maxResults),
   })
-  const page = await gmailJson<ListResponse>(`/messages?${query}`, deps)
+  const page = await gmailJson<GmailListResponse>(`/messages?${query}`, deps)
   return page.messages ?? []
 }
 
-/** Metadata reduces payload size; every messages.get currently costs 20 quota units. */
+/** The popup list needs headers only, not full MIME bodies. */
 async function fetchSummary(
-  ref: MessageRef,
+  ref: GmailMessageRef,
   deps: AuthorizedFetchDeps,
 ): Promise<MessageSummary> {
   const query = new URLSearchParams({ format: 'metadata' })
@@ -64,7 +66,7 @@ async function fetchSummary(
     query.append('metadataHeaders', header)
   }
 
-  const message = await gmailJson<MetadataResponse>(`/messages/${ref.id}?${query}`, deps)
+  const message = await gmailJson<GmailMetadataResponse>(`/messages/${ref.id}?${query}`, deps)
   const headers = message.payload?.headers ?? []
   const header = (name: string): string =>
     headers.find((entry) => entry.name.toLowerCase() === name.toLowerCase())?.value ?? ''
@@ -87,4 +89,47 @@ export async function listPromotionSummaries(
     fetchSummary(ref, deps),
   )
   return summaries.sort((a, b) => b.date - a.date)
+}
+
+/**
+ * The backfill uses format=full because extraction needs the MIME tree.
+ */
+export function createGmailPort(deps: AuthorizedFetchDeps): GmailPort {
+  return {
+    async listPage({ newerThanDays, pageToken, pageSize }) {
+      const query = new URLSearchParams({
+        labelIds: 'CATEGORY_PROMOTIONS',
+        q: `newer_than:${newerThanDays}d`,
+        maxResults: String(pageSize),
+      })
+      if (pageToken) query.set('pageToken', pageToken)
+
+      const page = await gmailJson<GmailListResponse>(
+        `/messages?${query}`,
+        deps,
+      )
+      return {
+        ids: (page.messages ?? []).map((message) => message.id),
+        nextPageToken: page.nextPageToken ?? null,
+      }
+    },
+
+    getFull(messageId) {
+      const id = encodeURIComponent(messageId)
+      return gmailJson<GmailMessage>(`/messages/${id}?format=full`, deps)
+    },
+
+    async getAttachmentData(messageId, attachmentId) {
+      const id = encodeURIComponent(messageId)
+      const partId = encodeURIComponent(attachmentId)
+      const attachment = await gmailJson<GmailAttachmentResponse>(
+        `/messages/${id}/attachments/${partId}`,
+        deps,
+      )
+      if (typeof attachment.data !== 'string') {
+        throw new Error('Gmail attachment response did not include data')
+      }
+      return attachment.data
+    },
+  }
 }

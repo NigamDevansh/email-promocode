@@ -7,10 +7,31 @@ client and, from phase 4 onward, your own LLM API key.
 
 Full design in [COUPON-EXTENSION-DESIGN.md](COUPON-EXTENSION-DESIGN.md).
 
-**Status: Phase 1 implementation complete.** Automated type, unit and build
-checks pass. OAuth, a Gmail Promotions listing and a popup showing recent
-subjects are implemented; the final account-level check requires your real
-Google client ID and Gmail test user. No extraction, IndexedDB or chat yet.
+**Status: Phases 1–3 are implemented.** Automated type, unit and build checks
+pass. The final account-level check still requires your real Google client ID
+and Gmail test user.
+
+The extension currently:
+
+- connects to Gmail with read-only OAuth and previews 25 recent Promotions
+  messages;
+- manually scans up to 45 days of Promotions mail using a persisted,
+  restart-safe checkpoint;
+- decodes Gmail MIME content and extracts coupon candidates from links, image
+  alt text, subjects and body text without a DOM or network parser;
+- displays only the stronger link/alt-text results for now, while retaining
+  subject/body guesses for the future LLM phase;
+- stores processed-message records and deduplicated offers in local IndexedDB;
+  and
+- shows saved offers while disconnected, with search, copy and source-email
+  links.
+
+The popup currently requests each bounded scan slice. Closing it may leave the
+current slice to finish, but it stops requesting further slices; reopen the
+popup and press **Scan Promotions** to resume from the saved checkpoint. A
+completed backfill does not yet discover later emails automatically. Scheduled
+five-minute/history sync, LLM-enriched expiry/currency/conditions, chat, OCR and
+the 30-day expired-offer cleanup belong to later phases and are not implemented.
 
 ## Requirements
 

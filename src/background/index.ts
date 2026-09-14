@@ -1,15 +1,24 @@
+import type {
+  AuthState,
+  PopupRequest,
+  PopupResponse,
+  SyncProgress,
+} from '../types/messaging.js'
 import type { AuthorizedFetchDeps } from '../types/auth.js'
-import type { AuthState, PopupRequest, PopupResponse } from '../types/messaging.js'
-import {
-  authStateForError,
-  ReauthRequiredError,
-} from './auth.js'
+import type { BackfillCheckpoint } from '../types/storage.js'
+import { META_KEYS } from '../utils/storage.js'
+import { authStateForError, ReauthRequiredError } from './auth.js'
+import { runBackfillSlice } from './backfill.js'
 import { chromeTokens, requestAuthToken } from './chrome-tokens.js'
-import { listPromotionSummaries } from './gmail.js'
+import { BACKFILL_DAYS, createGmailPort, listPromotionSummaries } from './gmail.js'
+import { indexedDbStore } from './idb.js'
 import { readAuthState, writeAuthState } from './state.js'
 
-/** Phase 1 shows a single page of recent subjects. Phase 2 owns the real backfill. */
+/** Keep the popup preview small; the backfill uses its own paginated listing. */
 const POPUP_MESSAGE_LIMIT = 25
+
+/** Section 6: bounded work per wake, so a checkpoint always lands before Chrome stops the worker. */
+const SLICE_BUDGET = 15
 
 const deps: AuthorizedFetchDeps = {
   tokens: chromeTokens,
@@ -48,6 +57,41 @@ async function connect(): Promise<PopupResponse> {
   }
 }
 
+async function runSync(): Promise<SyncProgress> {
+  const result = await runBackfillSlice({
+    store: indexedDbStore,
+    gmail: createGmailPort(deps),
+    now: () => Date.now(),
+    budget: SLICE_BUDGET,
+    backfillDays: BACKFILL_DAYS,
+  })
+
+  const checkpoint = await indexedDbStore.getMeta<BackfillCheckpoint>(META_KEYS.backfill)
+
+  return {
+    processed: result.processed,
+    skipped: result.skipped,
+    withCandidates: result.withCandidates,
+    totalProcessed: checkpoint?.processedCount ?? 0,
+    remaining: result.remaining,
+    nextAttemptAt: result.nextAttemptAt,
+    error: result.error,
+  }
+}
+
+let inFlightSync: Promise<SyncProgress> | undefined
+
+/**
+ * Section 6: coalesce overlapping requests into the run already in flight.
+ * There is only one extension service-worker instance, so no lock is needed.
+ */
+function syncOnce(): Promise<SyncProgress> {
+  inFlightSync ??= runSync().finally(() => {
+    inFlightSync = undefined
+  })
+  return inFlightSync
+}
+
 async function handle(request: PopupRequest): Promise<PopupResponse> {
   switch (request.type) {
     case 'get-state':
@@ -57,12 +101,19 @@ async function handle(request: PopupRequest): Promise<PopupResponse> {
       return await connect()
 
     case 'list-messages': {
-      if ((await readAuthState()) === 'reauth_required') {
-        throw new ReauthRequiredError()
-      }
+      if ((await readAuthState()) === 'reauth_required') throw new ReauthRequiredError()
       const messages = await listPromotionSummaries(deps, POPUP_MESSAGE_LIMIT)
       await writeAuthState('connected')
       return { ok: true, authState: 'connected', messages }
+    }
+
+    case 'list-offers': {
+      return { ok: true, authState: await readAuthState(), offers: await indexedDbStore.listOffers() }
+    }
+
+    case 'sync': {
+      if ((await readAuthState()) === 'reauth_required') throw new ReauthRequiredError()
+      return { ok: true, authState: 'connected', progress: await syncOnce() }
     }
   }
 }

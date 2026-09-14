@@ -13,8 +13,25 @@
 
     <button id="connect" type="button" hidden>Connect Google</button>
     <button id="refresh" type="button" hidden>Refresh</button>
+    <button id="scan" type="button" hidden>Scan for codes</button>
 
-    <ul id="messages"></ul>
+    <p id="progress" role="status"></p>
+
+    <input
+      id="search"
+      type="search"
+      aria-label="Search saved coupons"
+      placeholder="Search brand or code"
+      hidden
+    />
+
+    <ul id="offers"></ul>
+    <p id="offers-empty" hidden></p>
+
+    <details id="recent">
+      <summary>Recent promotional emails</summary>
+      <ul id="messages"></ul>
+    </details>
 
     <script type="module" src="./popup.ts"></script>
   </body>

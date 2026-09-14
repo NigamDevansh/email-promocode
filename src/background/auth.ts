@@ -1,11 +1,6 @@
 import type { AuthorizedFetchDeps } from '../types/auth.js'
 import type { AuthState } from '../types/messaging.js'
 
-/**
- * Chrome Identity already caches access tokens in memory, so the extension
- * never stores a second copy. This port exists so the retry policy below can be
- * tested without a browser.
- */
 /** Silent auth returned nothing: the user has simply not connected yet. */
 export class NotConnectedError extends Error {
   constructor() {

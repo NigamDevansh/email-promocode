@@ -1,4 +1,11 @@
-import type { GmailHeader, GmailMessage, GmailPart, ParsedMessage } from '../types/gmail.js'
+import type {
+  CollectedText,
+  ExternalTextPart,
+  GmailHeader,
+  GmailMessage,
+  GmailPart,
+  ParsedMessage,
+} from '../types/gmail.js'
 
 /** Gmail encodes part bodies as base64url, not standard base64. */
 export function decodeBase64Url(data: string, charset = 'utf-8'): string {
@@ -31,21 +38,24 @@ function charsetOf(part: GmailPart): string {
   return (match?.[2] ?? match?.[3] ?? match?.[4] ?? 'utf-8').trim()
 }
 
-/** An attachment, not inline body content. */
+/** `attachmentId` alone can mean an externalized body, so do not use it here. */
 function isAttachment(part: GmailPart): boolean {
-  if (part.body?.attachmentId) return true
   if (part.filename) return true
   return /^attachment\b/i.test(headerValue(part.headers, 'Content-Disposition'))
 }
 
-/**
- * Walks the whole MIME tree and concatenates inline text parts by type.
- * Nested multipart/{alternative,mixed,related} all fall out of the recursion;
- * attachments are skipped because phase 7 owns images and PDFs stay out of scope.
- */
-export function collectTextParts(payload: GmailPart | undefined): { text: string; html: string } {
+function textKindOf(part: GmailPart): 'text' | 'html' | null {
+  const mimeType = (part.mimeType ?? '').toLowerCase()
+  if (mimeType.startsWith('text/plain')) return 'text'
+  if (mimeType.startsWith('text/html')) return 'html'
+  return null
+}
+
+/** Walks nested MIME parts, collecting inline text while skipping attachments. */
+export function collectTextParts(payload: GmailPart | undefined): CollectedText {
   const text: string[] = []
   const html: string[] = []
+  const external: ExternalTextPart[] = []
 
   const visit = (part: GmailPart | undefined): void => {
     if (!part) return
@@ -56,18 +66,39 @@ export function collectTextParts(payload: GmailPart | undefined): { text: string
 
     for (const child of part.parts ?? []) visit(child)
 
-    if (!part.body?.data) return
+    const kind = textKindOf(part)
+    if (!kind) return
 
-    const mimeType = (part.mimeType ?? '').toLowerCase()
-    if (mimeType.startsWith('text/plain')) {
-      text.push(decodeBase64Url(part.body.data, charsetOf(part)))
-    } else if (mimeType.startsWith('text/html')) {
-      html.push(decodeBase64Url(part.body.data, charsetOf(part)))
+    if (part.body?.data) {
+      const decoded = decodeBase64Url(part.body.data, charsetOf(part))
+      ;(kind === 'text' ? text : html).push(decoded)
+      return
+    }
+
+    // Body externalized by Gmail; the runtime fetches it before extraction.
+    if (part.body?.attachmentId) {
+      external.push({ attachmentId: part.body.attachmentId, kind, charset: charsetOf(part) })
     }
   }
 
   visit(payload)
-  return { text: text.join('\n'), html: html.join('\n') }
+  return { text: text.join('\n'), html: html.join('\n'), external }
+}
+
+/** Fetches and merges text bodies Gmail did not inline in the message payload. */
+export async function hydrateExternalParts(
+  collected: CollectedText,
+  fetchAttachmentData: (attachmentId: string) => Promise<string>,
+): Promise<{ text: string; html: string }> {
+  let { text, html } = collected
+
+  for (const part of collected.external) {
+    const decoded = decodeBase64Url(await fetchAttachmentData(part.attachmentId), part.charset)
+    if (part.kind === 'text') text = text ? `${text}\n${decoded}` : decoded
+    else html = html ? `${html}\n${decoded}` : decoded
+  }
+
+  return { text, html }
 }
 
 /** §9: lowercased domain parsed from the RFC 5322 `From` address. */
@@ -80,7 +111,7 @@ export function senderDomainOf(from: string): string {
 export function parseGmailMessage(message: GmailMessage): ParsedMessage {
   const headers = message.payload?.headers
   const from = headerValue(headers, 'From')
-  const { text, html } = collectTextParts(message.payload)
+  const { text, html, external } = collectTextParts(message.payload)
 
   return {
     id: message.id,
@@ -91,5 +122,6 @@ export function parseGmailMessage(message: GmailMessage): ParsedMessage {
     senderDomain: senderDomainOf(from),
     text,
     html,
+    externalParts: external,
   }
 }

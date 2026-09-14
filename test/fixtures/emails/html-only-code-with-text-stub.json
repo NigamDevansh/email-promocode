@@ -1,0 +1,68 @@
+{
+  "description": "a generic plain-text stub must not hide a code that exists only in the HTML surface",
+  "message": {
+    "id": "stub01",
+    "threadId": "thread-stub01",
+    "internalDate": "1757770000000",
+    "labelIds": [
+      "CATEGORY_PROMOTIONS",
+      "INBOX"
+    ],
+    "payload": {
+      "mimeType": "multipart/alternative",
+      "headers": [
+        {
+          "name": "From",
+          "value": "Boutique <mail@e.boutique.example>"
+        },
+        {
+          "name": "Subject",
+          "value": "Weekend only"
+        },
+        {
+          "name": "Date",
+          "value": "Sat, 13 Sep 2026 10:00:00 GMT"
+        }
+      ],
+      "body": {
+        "size": 0
+      },
+      "parts": [
+        {
+          "mimeType": "text/plain",
+          "headers": [
+            {
+              "name": "Content-Type",
+              "value": "text/plain; charset=\"utf-8\""
+            }
+          ],
+          "body": {
+            "size": 32,
+            "data": "VmlldyB0aGlzIGVtYWlsIGluIHlvdXIgYnJvd3Nlci4"
+          }
+        },
+        {
+          "mimeType": "text/html",
+          "headers": [
+            {
+              "name": "Content-Type",
+              "value": "text/html; charset=\"utf-8\""
+            }
+          ],
+          "body": {
+            "size": 83,
+            "data": "PGh0bWw-PGJvZHk-PHA-V2Vla2VuZCBvbmx5LjwvcD48cD5Vc2UgY29kZSBISURERU4zNSBhdCBjaGVja291dC48L3A-PC9ib2R5PjwvaHRtbD4"
+          }
+        }
+      ]
+    }
+  },
+  "expected": {
+    "senderDomain": "e.boutique.example",
+    "candidates": [
+      "HIDDEN35"
+    ],
+    "hasTriggerPhrase": true,
+    "shouldExtract": true
+  }
+}

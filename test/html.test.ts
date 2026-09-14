@@ -35,5 +35,16 @@ test('drops HTML comments, which ESPs use for conditional markup', () => {
 
 test('reads anchor targets and decodes entity-escaped ampersands in them', () => {
   const html = '<a href="https://x.example/c?coupon=A10&amp;utm=mail">Shop</a>'
-    assert.deepEqual(extractHrefs(html), ['https://x.example/c?coupon=A10&utm=mail'])
+  assert.deepEqual(extractHrefs(html), ['https://x.example/c?coupon=A10&utm=mail'])
+})
+
+test('does not read links or alt text from comments and script blocks', () => {
+  const html = [
+    '<!-- <a href="https://x.example/?coupon=COMMENT40">hidden</a> -->',
+    '<script><img alt="Use code SCRIPT50">',
+    '<a href="https://x.example/?coupon=REAL20">Shop</a>',
+  ].join('')
+
+  assert.deepEqual(extractHrefs(html), [])
+  assert.deepEqual(extractAltTexts(html), [])
 })

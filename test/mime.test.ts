@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import type { GmailPart } from '../src/types/gmail.ts'
-import { collectTextParts, decodeBase64Url, senderDomainOf } from '../src/utils/mime.ts'
+import {
+  collectTextParts,
+  decodeBase64Url,
+  hydrateExternalParts,
+  senderDomainOf,
+} from '../src/utils/mime.ts'
 
 const b64url = (value: string): string => Buffer.from(value, 'utf8').toString('base64url')
 
@@ -35,15 +40,18 @@ test('separates text and html across a nested tree', () => {
       },
     ],
   }
-  assert.deepEqual(collectTextParts(payload), { text: 'plain body', html: '<p>html body</p>' })
+  assert.deepEqual(collectTextParts(payload), {
+    text: 'plain body',
+    html: '<p>html body</p>',
+    external: [],
+  })
 })
 
-test('skips attachments identified by attachmentId, filename or disposition', () => {
+test('skips attachments identified by filename or disposition', () => {
   const payload: GmailPart = {
     mimeType: 'multipart/mixed',
     parts: [
       { mimeType: 'text/plain', body: { data: b64url('keep') } },
-      { mimeType: 'text/plain', body: { attachmentId: 'a1', data: b64url('drop-by-id') } },
       { mimeType: 'text/plain', filename: 'x.txt', body: { data: b64url('drop-by-filename') } },
       {
         mimeType: 'text/plain',
@@ -53,6 +61,56 @@ test('skips attachments identified by attachmentId, filename or disposition', ()
     ],
   }
   assert.equal(collectTextParts(payload).text, 'keep')
+})
+
+test('an externalized body is queued for fetching, not treated as an attachment', () => {
+  const payload: GmailPart = {
+    mimeType: 'multipart/alternative',
+    parts: [
+      {
+        mimeType: 'text/html',
+        headers: [{ name: 'Content-Type', value: 'text/html; charset="utf-8"' }],
+        body: { attachmentId: 'big-html-1', size: 400000 },
+      },
+    ],
+  }
+  const collected = collectTextParts(payload)
+
+  assert.equal(collected.html, '', 'nothing inline yet')
+  assert.deepEqual(collected.external, [
+    { attachmentId: 'big-html-1', kind: 'html', charset: 'utf-8' },
+  ])
+})
+
+test('hydrating an externalized body merges it into the right surface', async () => {
+  const collected = {
+    text: 'inline plain',
+    html: '',
+    external: [{ attachmentId: 'big-html-1', kind: 'html' as const, charset: 'utf-8' }],
+  }
+  const hydrated = await hydrateExternalParts(collected, async (id) => {
+    assert.equal(id, 'big-html-1')
+    return b64url('<p>Use code LARGE40</p>')
+  })
+
+  assert.deepEqual(hydrated, { text: 'inline plain', html: '<p>Use code LARGE40</p>' })
+})
+
+test('a real attachment still wins over an externalized body', () => {
+  const payload: GmailPart = {
+    mimeType: 'multipart/mixed',
+    parts: [
+      { mimeType: 'text/plain', body: { data: b64url('keep') } },
+      {
+        mimeType: 'text/plain',
+        filename: 'invoice.txt',
+        body: { attachmentId: 'real-attachment' },
+      },
+    ],
+  }
+  const collected = collectTextParts(payload)
+  assert.equal(collected.text, 'keep')
+  assert.deepEqual(collected.external, [], 'named files are not externalized bodies')
 })
 
 test('parses the registrable sender domain out of RFC 5322 forms', () => {

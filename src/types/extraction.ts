@@ -19,3 +19,8 @@ export interface GateResult {
    */
   shouldExtract: boolean
 }
+
+export interface TriggerContext {
+  afterTrigger: boolean
+  nearTrigger: boolean
+}
