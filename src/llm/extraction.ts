@@ -102,8 +102,15 @@ function emailDateOf(message: ParsedMessage): string {
   return Number.isNaN(date.getTime()) ? 'unknown' : date.toISOString().slice(0, 10)
 }
 
-export function buildExtractionPrompt(message: ParsedMessage, candidates: Candidate[]): string {
-  const surfaces = [...new Set([message.text, extractVisibleText(message.html)].filter(Boolean))]
+export function buildExtractionPrompt(
+  message: ParsedMessage,
+  candidates: Candidate[],
+  ocrText?: string,
+): string {
+  const surfaces = [
+    ...new Set([message.text, extractVisibleText(message.html)].filter(Boolean)),
+    ...(ocrText?.trim() ? [`OCR TEXT: ${ocrText.trim()}`] : []),
+  ]
   const separators = Math.max(0, surfaces.length - 1) * 2
   const surfaceBudget = Math.floor((MAX_BODY_CHARS - separators) / Math.max(1, surfaces.length))
   const body = surfaces.map((surface) => surface.slice(0, surfaceBudget)).join('\n\n')

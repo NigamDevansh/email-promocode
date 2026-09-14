@@ -12,84 +12,40 @@ import {
   binarize,
   flattenOntoWhite,
   isLightOnDark,
+  MAX_OCR_PIXELS,
   otsuThreshold,
   preprocess,
+  scaleFactorFor,
   toGrayscale,
   upscale,
 } from '../src/utils/preprocess.ts'
 
 // ---------------------------------------------------------------- image choice
 
-const img = (attrs: string): string => `<img ${attrs}>`
-
 test('template furniture never reaches OCR', () => {
-  const html = [
-    img('src="https://cdn.x/logo.png" width="600" height="200"'),
-    img('src="https://cdn.x/social-facebook.png" width="600" height="200"'),
-    img('src="https://cdn.x/spacer.gif" width="600" height="200"'),
-    img('src="https://cdn.x/tracking-pixel.gif" width="600" height="200"'),
-    img('src="https://cdn.x/hero-banner.jpg" width="600" height="400"'),
-  ].join('')
-
-  assert.deepEqual(
-    selectOcrImages(html, undefined).map((image) => image.ref),
-    ['https://cdn.x/hero-banner.jpg'],
-  )
-})
-
-test('an image declared too small to hold legible text is dropped', () => {
-  const html = [
-    img('src="https://cdn.x/tiny.png" width="80" height="20"'),
-    img('src="https://cdn.x/short.png" width="600" height="40"'),
-    img('src="https://cdn.x/banner.png" width="600" height="400"'),
-  ].join('')
-
-  assert.deepEqual(
-    selectOcrImages(html, undefined).map((image) => image.ref),
-    ['https://cdn.x/banner.png'],
-  )
-})
-
-test('an undeclared size is kept, because templates often omit it', () => {
-  const chosen = selectOcrImages(img('src="https://cdn.x/banner.png"'), undefined)
-  assert.equal(chosen.length, 1)
-  assert.equal(chosen[0]?.pixelArea, null)
-})
-
-test('only the largest one or two survive, biggest first', () => {
-  const html = [
-    img('src="https://cdn.x/a.png" width="300" height="300"'),
-    img('src="https://cdn.x/b.png" width="900" height="600"'),
-    img('src="https://cdn.x/c.png" width="600" height="400"'),
-  ].join('')
-
-  assert.deepEqual(
-    selectOcrImages(html, undefined).map((image) => image.ref),
-    ['https://cdn.x/b.png', 'https://cdn.x/c.png'],
-  )
-})
-
-test('an inline part outranks a remote one: it tells the sender nothing', () => {
   const payload: GmailPart = {
     mimeType: 'multipart/related',
     parts: [
-      { mimeType: 'image/png', filename: 'banner.png', body: { attachmentId: 'att-1', size: 90_000 } },
+      { mimeType: 'image/png', filename: 'logo.png', body: { attachmentId: 'logo', size: 90_000 } },
+      { mimeType: 'image/png', filename: 'hero-banner.png', body: { attachmentId: 'hero', size: 90_000 } },
     ],
   }
-  const html = img('src="https://cdn.x/huge.png" width="1200" height="800"')
-
-  const chosen = selectOcrImages(html, payload)
-  assert.equal(chosen[0]?.source, 'inline')
-  assert.equal(chosen[0]?.ref, 'att-1')
+  assert.deepEqual(selectOcrImages(payload).map((image) => image.attachmentId), ['hero'])
 })
 
-test('non-http sources are ignored', () => {
-  const html = [
-    img('src="cid:banner@mail" width="600" height="400"'),
-    img('src="data:image/png;base64,AAAA" width="600" height="400"'),
-  ].join('')
-
-  assert.deepEqual(selectOcrImages(html, undefined), [])
+test('only the largest one or two inline images survive, biggest first', () => {
+  const payload: GmailPart = {
+    mimeType: 'multipart/related',
+    parts: [
+      { mimeType: 'image/png', body: { attachmentId: 'small', size: 9_000 } },
+      { mimeType: 'image/png', body: { attachmentId: 'large', size: 400_000 } },
+      { mimeType: 'image/png', body: { attachmentId: 'medium', size: 90_000 } },
+    ],
+  }
+  assert.deepEqual(
+    selectOcrImages(payload).map((image) => image.attachmentId),
+    ['large', 'medium'],
+  )
 })
 
 test('a fetched image too small in bytes is not worth reading', () => {
@@ -209,25 +165,6 @@ test('mean confidence of nothing is zero, not NaN', () => {
   assert.equal(meanConfidenceOf([]), 0)
 })
 
-test('inline size and remote size are never compared against each other', () => {
-  // A small inline part still outranks a huge remote banner, because bytes and
-  // pixels are not comparable and inline is preferred on privacy grounds.
-  const payload: GmailPart = {
-    mimeType: 'multipart/related',
-    parts: [{ mimeType: 'image/png', body: { attachmentId: 'small', size: 7_000 } }],
-  }
-  const html = img('src="https://cdn.x/huge.png" width="1600" height="1200"')
-
-  const chosen = selectOcrImages(html, payload)
-  assert.deepEqual(
-    chosen.map((image) => [image.source, image.byteSize, image.pixelArea]),
-    [
-      ['inline', 7_000, null],
-      ['remote', null, 1_920_000],
-    ],
-  )
-})
-
 test('inline parts rank against each other by bytes', () => {
   const payload: GmailPart = {
     mimeType: 'multipart/related',
@@ -238,7 +175,71 @@ test('inline parts rank against each other by bytes', () => {
   }
 
   assert.deepEqual(
-    selectOcrImages('', payload).map((image) => image.ref),
+    selectOcrImages(payload).map((image) => image.attachmentId),
     ['large', 'small'],
   )
+})
+
+// ------------------------------------------------------------- the pixel ceiling
+
+test('a banner small enough to grow is still tripled', () => {
+  assert.equal(scaleFactorFor(600, 400, 3), 3)
+})
+
+test('an image that would blow past the ceiling is scaled down to meet it', () => {
+  // An 8MB JPEG can decode to twelve megapixels; tripling it allocates
+  // hundreds of megabytes of intermediates inside the offscreen document.
+  const factor = scaleFactorFor(4000, 3000, 3)
+
+  assert.ok(factor < 1, 'shrunk rather than grown')
+  assert.ok(4000 * factor * (3000 * factor) <= MAX_OCR_PIXELS + 1)
+})
+
+test('the ceiling holds whatever the source dimensions are', () => {
+  for (const [width, height] of [
+    [600, 400],
+    [2400, 1800],
+    [4000, 3000],
+    [12_000, 200],
+  ] as const) {
+    const factor = scaleFactorFor(width, height, 3)
+    const pixels = Math.round(width * factor) * Math.round(height * factor)
+    assert.ok(pixels <= MAX_OCR_PIXELS * 1.01, `${width}x${height} stays under the ceiling`)
+  }
+})
+
+test('shrinking preserves the picture rather than emptying it', () => {
+  const image = solid(4, 4, [10, 20, 30, 255])
+  const shrunk = upscale(image, 0.5)
+
+  assert.deepEqual([shrunk.width, shrunk.height], [2, 2])
+  assert.deepEqual([...(shrunk.data.slice(0, 4) ?? [])], [10, 20, 30, 255])
+})
+
+test('an image too small to survive a shrink keeps at least one pixel', () => {
+  const shrunk = upscale(solid(2, 2, [0, 0, 0, 255]), 0.1)
+  assert.deepEqual([shrunk.width, shrunk.height], [1, 1])
+})
+
+test('an oversized banner still comes out of the pipeline as dark ink on white', () => {
+  // Wide enough to be shrunk: the polarity work must survive the resample.
+  const width = 3000
+  const height = 2000
+  const data = new Uint8ClampedArray(width * height * 4)
+  for (let pixel = 0; pixel < width * height; pixel += 1) {
+    // A dark background with a light stripe down the left edge.
+    const value = pixel % width < width / 8 ? 245 : 10
+    const i = pixel * 4
+    data[i] = value
+    data[i + 1] = value
+    data[i + 2] = value
+    data[i + 3] = 255
+  }
+
+  const out = preprocess({ width, height, data })
+  const gray = toGrayscale(out)
+
+  assert.ok(out.width * out.height <= MAX_OCR_PIXELS, 'the ceiling was respected')
+  assert.equal(gray[0], 0, 'the light stripe is ink')
+  assert.equal(gray[out.width - 1], 255, 'the dark background is paper')
 })

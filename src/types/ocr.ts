@@ -1,19 +1,19 @@
 /** An image worth spending OCR on, chosen before anything is fetched or decoded. */
 export interface ImageCandidate {
-  /**
-   * Inline parts are served by Google and register nothing with the sender.
-   * Remote parts are fetched from the retailer CDN and do register an open.
-   */
-  source: 'inline' | 'remote'
-  /** attachmentId for an inline part, absolute URL for a remote one. */
-  ref: string
+  /** Inline parts are served by Gmail; the sender is never contacted. */
+  source: 'inline'
+  /** Present when Gmail kept the image in its attachment endpoint. */
+  attachmentId: string | null
+  /** Base64url bytes when Gmail placed a small image directly in body.data. */
+  data: string | null
   width: number | null
   height: number | null
-  /** Declared area in px. Remote only: markup is the only size signal there. */
+  /** Gmail does not declare pixel dimensions for inline MIME parts. */
   pixelArea: number | null
-  /** Part size in bytes. Inline only: Gmail reports size, never dimensions. */
+  /** Gmail's declared part size, checked before the attachment is downloaded. */
   byteSize: number | null
-  alt: string
+  /** The MIME type Gmail declared for this image. */
+  mimeType: string
 }
 
 /** Raw pixels handed to preprocessing. */

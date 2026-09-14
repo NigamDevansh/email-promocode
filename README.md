@@ -7,9 +7,11 @@ client and, from phase 4 onward, your own LLM API key.
 
 Full design in [COUPON-EXTENSION-DESIGN.md](COUPON-EXTENSION-DESIGN.md).
 
-**Status: Phases 1–5 and automatic rolling sync are implemented.** Automated
-type, unit and build checks pass. The final account-level checks still require
-your real Google client ID, Gmail test user and one configured LLM provider key.
+**Status: Phases 1–7 are implemented.** Automated type, unit and build checks
+pass. The final account-level checks still require your real Google client ID,
+Gmail test user and one configured LLM provider key — and the OCR stage in
+particular needs a real Chrome to confirm, since nothing in a Node test suite
+exercises the offscreen document or the Tesseract worker it hosts.
 
 The extension currently:
 
@@ -33,8 +35,8 @@ The extension currently:
 The popup has no scanning controls. It contains only Connect when Google access
 is absent, a compact background-progress strip, the coupon chat, and a Settings
 gear. The current five-minute refresh re-lists the configured rolling window
-and the incremental loop below keeps it cheap. The 30-day expired-offer cleanup
-remains future work.
+and the incremental loop below keeps it cheap. Each sync also removes offers
+whose known expiry is more than 30 days old.
 
 Each sync walks Gmail's history from the cursor stored by the last full scan,
 processes anything new, and only then spends what is left of its budget on the
@@ -48,9 +50,18 @@ alt-text and body-text stages find no code, the largest one or two images in
 the message are read with bundled Tesseract and the recovered text re-enters
 candidate detection. A code read this way is always flagged for review, and a
 read the engine was not confident about yields nothing rather than a code that
-would fail at checkout. `npm run vendor:ocr` (run automatically before a build)
-places the engine and language data in `public/vendor/tesseract/`; they are
-roughly 11MB and deliberately not committed.
+would fail at checkout. `npm run vendor:ocr` (run automatically before a build
+and before `npm run dev`) places the engine and language data in
+`public/vendor/tesseract/`; they are roughly 11MB and deliberately not
+committed.
+
+### OCR privacy boundary
+
+OCR reads only images the sender **inlined into the message**, which Gmail
+serves and which tell the sender nothing. Remote CDN banners are deliberately
+out of scope for now: fetching one can register an email open, and this simple
+extension does not request broad website access for a feature it cannot explain
+or control in its Settings UI.
 
 ## Requirements
 

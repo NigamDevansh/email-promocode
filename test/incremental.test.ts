@@ -4,6 +4,9 @@ import { runBackfillSlice } from '../src/background/backfill.ts'
 import { GmailApiError } from '../src/background/gmail.ts'
 import { runIncrementalSlice } from '../src/background/incremental.ts'
 import type { BackfillDeps } from '../src/types/backfill.ts'
+import { LlmError, type ExtractionDeps } from '../src/types/llm.ts'
+import { RequestQueue } from '../src/llm/queue.ts'
+import { DEFAULT_SETTINGS } from '../src/utils/settings.ts'
 import type { GmailMessage } from '../src/types/gmail.ts'
 import type { IncrementalJob } from '../src/types/incremental.ts'
 import { META_KEYS } from '../src/utils/storage.ts'
@@ -46,6 +49,19 @@ function setup(historyPages: string[][], ids: string[] = historyPages.flat()) {
   })
 
   return { store, gmail, deps }
+}
+
+/** A provider that always fails the same way, to separate the failure kinds. */
+function rejectingLlm(error: LlmError): ExtractionDeps {
+  return {
+    adapter: {
+      id: 'anthropic',
+      complete: () => Promise.reject(error),
+    },
+    settings: { ...DEFAULT_SETTINGS, apiKey: 'test-key', model: 'test-model' },
+    queue: new RequestQueue({ minSpacingMs: 0, now: () => 0, sleep: async () => undefined }),
+    fetchImpl: async () => new Response('{}'),
+  }
 }
 
 const jobOf = (store: MemoryStore): IncrementalJob | undefined =>
@@ -217,14 +233,16 @@ test('a permanently broken message is recorded and the cursor still advances', a
   gmail.profileHistoryId = '200'
   gmail.failing.add('n1')
 
-  // Four attempts exhaust the retry cap; each wake is past the previous backoff.
+  // One attempt plus the four retries section 6 allows, each wake past the
+  // previous backoff. The cap matches the backfill runner exactly: the same
+  // constant meaning the same number of tries on either path.
   let clock = 1_000_000
   const advancing = (): BackfillDeps => ({
     ...deps(),
     now: () => (clock += 10 * 60_000),
   })
 
-  for (let attempt = 0; attempt < 4; attempt += 1) await runIncrementalSlice(advancing())
+  for (let attempt = 0; attempt < 5; attempt += 1) await runIncrementalSlice(advancing())
 
   assert.equal(store.processed.get('n1')?.status, 'failed')
   assert.equal(store.processed.get('n2')?.status, 'candidates', 'the scan moved past it')
@@ -247,4 +265,104 @@ test('a cursor that cannot be read leaves the mailbox untouched', async () => {
     runIncrementalSlice({ store, gmail, now: () => 0, budget: 10, backfillDays: 45 }),
   )
   assert.equal(cursorOf(store), '100', 'a 5xx must not look like an expired cursor')
+})
+
+// ------------------------------------- history longer than one slice can walk
+
+test('a history longer than one slice continues instead of stranding the job', async () => {
+  // Twelve pages against a ten-page slice budget: the first wake cannot finish.
+  const ids = Array.from({ length: 12 }, (_, index) => `m${index}`)
+  const { store, gmail, deps } = setup(ids.map((id) => [id]))
+  await store.setMeta(META_KEYS.historyId, '100')
+  gmail.profileHistoryId = '999'
+
+  const first = await runIncrementalSlice(deps(50))
+
+  assert.equal(first.remaining, true, 'pages are left, so there is work outstanding')
+  assert.equal(jobOf(store)?.pageToken, '10', 'the unwalked token is kept, not dropped')
+  assert.equal(cursorOf(store), '100', 'and the cursor waits for the rest')
+
+  const second = await runIncrementalSlice(deps(50))
+
+  assert.equal(second.discovered, 2, 'the second wake follows the persisted token')
+  assert.equal(store.processed.size, 12, 'every message in the range is parsed exactly once')
+  assert.equal(cursorOf(store), '999', 'only now does the cursor move')
+  assert.equal(jobOf(store), undefined)
+})
+
+test('pages that add no messages still resolve rather than freezing the cursor', async () => {
+  // Gmail can report a long run of history with nothing in Promotions.
+  const { store, gmail, deps } = setup(Array.from({ length: 11 }, () => []), [])
+  await store.setMeta(META_KEYS.historyId, '100')
+  gmail.profileHistoryId = '400'
+
+  await runIncrementalSlice(deps())
+  await runIncrementalSlice(deps())
+
+  assert.equal(cursorOf(store), '400', 'an empty range is still a range that was covered')
+  assert.equal(jobOf(store), undefined)
+})
+
+test('a slice that walks its page budget without finishing still makes progress', async () => {
+  const ids = Array.from({ length: 12 }, (_, index) => `m${index}`)
+  const { store, gmail, deps } = setup(ids.map((id) => [id]))
+  await store.setMeta(META_KEYS.historyId, '100')
+
+  await runIncrementalSlice(deps(50))
+
+  assert.equal(gmail.historyCalls.length, 10, 'one wake walks a bounded number of pages')
+  assert.equal(store.processed.size, 10, 'and parses what those pages found')
+})
+
+// ------------------------------------------- settings failures are not message failures
+
+test('a bad API key stops the slice instead of burning the backlog', async () => {
+  const { store, deps } = setup([['n1', 'n2']])
+  await store.setMeta(META_KEYS.historyId, '100')
+
+  await assert.rejects(
+    () => runIncrementalSlice({ ...deps(), llm: rejectingLlm(new LlmError('auth', 'invalid x-api-key', 401)) }),
+    /invalid x-api-key/,
+  )
+
+  assert.equal(store.processed.size, 0, 'section 6: a key the user can fix is not a dead message')
+  assert.deepEqual(jobOf(store)?.pendingMessageIds, ['n1', 'n2'], 'the whole job survives')
+  assert.equal(cursorOf(store), '100', 'and the cursor does not move past unread mail')
+})
+
+test('an unusable model is a settings problem, not twelve failed messages', async () => {
+  const { store, deps } = setup([['n1']])
+  await store.setMeta(META_KEYS.historyId, '100')
+
+  await assert.rejects(() =>
+    runIncrementalSlice({ ...deps(), llm: rejectingLlm(new LlmError('model', 'unknown model', 404)) }),
+  )
+
+  assert.equal(store.processed.size, 0)
+})
+
+test('a provider rate limit is retried, unlike a bad key', async () => {
+  const { store, deps } = setup([['n1']])
+  await store.setMeta(META_KEYS.historyId, '100')
+
+  const result = await runIncrementalSlice({
+    ...deps(),
+    llm: rejectingLlm(new LlmError('rate-limit', 'slow down', 429)),
+  })
+
+  assert.equal(result.remaining, true)
+  assert.ok((result.nextAttemptAt ?? 0) > 1_000_000, 'backed off rather than given up on')
+  assert.equal(store.processed.size, 0, 'and nothing was written as failed')
+})
+
+test('an incremental provider retry honors the provider reset time', async () => {
+  const { store, deps } = setup([['n1']])
+  await store.setMeta(META_KEYS.historyId, '100')
+
+  const result = await runIncrementalSlice({
+    ...deps(),
+    llm: rejectingLlm(new LlmError('rate-limit', 'slow down', 429, 180_000)),
+  })
+
+  assert.equal(result.nextAttemptAt, 1_180_000)
 })

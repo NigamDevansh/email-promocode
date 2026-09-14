@@ -24,6 +24,10 @@ let workerPromise: Promise<Worker> | undefined
 function engine(): Promise<Worker> {
   workerPromise ??= createWorker('eng', 1, {
     workerPath: vendored('worker.min.js'),
+    // Tesseract defaults to wrapping the worker in a blob: URL, which MV3
+    // refuses under `script-src 'self'` — the worker simply never starts and
+    // every read comes back empty. Load the vendored file by its own URL.
+    workerBlobURL: false,
     // Pinned to the exact vendored build: letting Tesseract pick a variant
     // would have it request a file this extension does not ship.
     corePath: vendored('tesseract-core-simd-lstm.wasm.js'),

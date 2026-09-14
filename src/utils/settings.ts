@@ -24,7 +24,6 @@ export const DEFAULT_SETTINGS: Settings = {
   apiKey: '',
   model: DEFAULT_MODELS.anthropic,
   backfillDays: 45,
-  fetchRemoteImages: false,
 }
 
 function isProvider(value: unknown): value is ProviderId {
@@ -48,7 +47,6 @@ export function normalizeSettings(raw: unknown): Settings {
     model: model || DEFAULT_MODELS[provider],
     // §6: the deeper scan is opt-in; keep the window inside sane bounds.
     backfillDays: Number.isFinite(days) ? Math.min(Math.max(Math.trunc(days), 1), 365) : 45,
-    fetchRemoteImages: record['fetchRemoteImages'] === true,
   }
 }
 

@@ -14,6 +14,32 @@ import type { RgbaImage } from '../types/ocr.js'
 export const UPSCALE_FACTOR = 3
 
 /**
+ * Ceiling on the pixels handed to Tesseract.
+ *
+ * The byte cap upstream bounds the *compressed* file, which says little: an
+ * 8MB JPEG can decode to twelve megapixels, and tripling that would allocate
+ * several hundred megabytes of intermediate buffers inside the offscreen
+ * document. Four megapixels is around 2300x1730 — far more than a banner needs
+ * to be legible.
+ */
+export const MAX_OCR_PIXELS = 4_000_000
+
+/**
+ * The scale this image can actually take: the requested upscale, reduced to
+ * whatever keeps the result under `MAX_OCR_PIXELS`. A source already larger
+ * than the ceiling comes back below 1, i.e. it is shrunk rather than grown.
+ */
+export function scaleFactorFor(
+  width: number,
+  height: number,
+  factor: number = UPSCALE_FACTOR,
+): number {
+  const pixels = width * height
+  if (pixels <= 0) return factor
+  return Math.min(factor, Math.sqrt(MAX_OCR_PIXELS / pixels))
+}
+
+/**
  * Composites onto white. A transparent PNG left unflattened reads as black,
  * which turns dark text on a transparent background into black on black.
  */
@@ -32,12 +58,16 @@ export function flattenOntoWhite(image: RgbaImage): RgbaImage {
   return { width: image.width, height: image.height, data: out }
 }
 
-/** Nearest-neighbour: deterministic, and blocky edges do not hurt a threshold pass. */
+/**
+ * Nearest-neighbour resample: deterministic, and blocky edges do not hurt a
+ * threshold pass. A factor below 1 shrinks, which is how an oversized banner
+ * is brought under `MAX_OCR_PIXELS`.
+ */
 export function upscale(image: RgbaImage, factor: number = UPSCALE_FACTOR): RgbaImage {
-  if (factor <= 1) return image
+  if (factor === 1) return image
 
-  const width = Math.round(image.width * factor)
-  const height = Math.round(image.height * factor)
+  const width = Math.max(1, Math.round(image.width * factor))
+  const height = Math.max(1, Math.round(image.height * factor))
   const out = new Uint8ClampedArray(width * height * 4)
 
   for (let y = 0; y < height; y += 1) {
@@ -159,7 +189,17 @@ export function grayToRgba(gray: Uint8ClampedArray, width: number, height: numbe
 
 /** The full §7 pipeline, in the order that section specifies. */
 export function preprocess(image: RgbaImage, factor: number = UPSCALE_FACTOR): RgbaImage {
-  const scaled = upscale(flattenOntoWhite(image), factor)
+  const effective = scaleFactorFor(image.width, image.height, factor)
+
+  // Flattening is a per-pixel operation and nearest-neighbour resampling only
+  // ever copies whole pixels, so the two commute: doing whichever shrinks the
+  // buffer first halves the peak allocation without changing a single output
+  // byte. §7's stated order is preserved in effect, not in literal sequence.
+  const scaled =
+    effective < 1
+      ? flattenOntoWhite(upscale(image, effective))
+      : upscale(flattenOntoWhite(image), effective)
+
   const gray = toGrayscale(scaled)
   const threshold = otsuThreshold(gray)
   const binary = binarize(gray, threshold, isLightOnDark(gray, threshold))

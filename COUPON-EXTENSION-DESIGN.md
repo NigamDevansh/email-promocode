@@ -52,7 +52,7 @@ flowchart TB
         POPUP["<b>Popup UI</b><br/>coupon list · chat · settings"]
         ALARM["<b>chrome.alarms</b><br/>wake · resume · scheduled sync"]
         SW["<b>Service Worker</b><br/>auth · sync loop · scheduling"]
-        OFF["<b>Offscreen Document</b><br/>optional image OCR"]
+        OFF["<b>Offscreen Document</b><br/>inline-image OCR"]
         IDB[("<b>IndexedDB</b><br/>offers · processed · meta · chat")]
         CS[("<b>chrome.storage</b><br/>API key · settings")]
     end
@@ -63,7 +63,6 @@ flowchart TB
     end
 
     LLM["<b>LLM adapter</b><br/>Anthropic · OpenAI · Gemini"]
-    CDN["<b>Retailer CDNs</b><br/>banner images"]
 
     POPUP <--> SW
     ALARM --> SW
@@ -76,14 +75,13 @@ flowchart TB
     OFF -. OCR results .-> SW
     SW --> IDB
     SW --> LLM
-    OFF --> CDN
 
     classDef browser fill:#e8f0fe,stroke:#4285f4,stroke-width:1px
     classDef google fill:#fef7e0,stroke:#f9ab00,stroke-width:1px
     classDef ext fill:#f3e8fd,stroke:#a142f4,stroke-width:1px
     class POPUP,ALARM,SW,OFF,IDB,CS browser
     class OAUTH,GAPI google
-    class LLM,CDN ext
+    class LLM ext
 ```
 
 ### Why this split
@@ -92,7 +90,7 @@ flowchart TB
 |---|---|---|---|
 | Popup UI | Popup page | Chat, list, settings | Dies on close — holds no durable state |
 | Service Worker | Background | Auth, Gmail sync, DB writes | Killed aggressively by MV3; keep it thin |
-| Offscreen Document | Hidden page | Optional OCR only | Added in phase 7 so bundled Tesseract can spawn its worker without complicating the core parser |
+| Offscreen Document | Hidden page | Inline-image OCR only | Added in phase 7 so bundled Tesseract can spawn its worker without complicating the core parser |
 | IndexedDB | Browser | Offers, cache state, chat history | Everything stays on disk, locally |
 | `chrome.storage.local` | Browser | API key, model choice, settings | Survives restarts; editable without a rebuild |
 
@@ -222,8 +220,6 @@ Put it in a settings page that writes to `chrome.storage.local`:
 | `LLM_API_KEY` | your own key |
 | `LLM_MODEL` | `claude-haiku-4-5-20251001` |
 | `BACKFILL_DAYS` | `45` |
-| `ENABLE_OCR` | `false` |
-| `FETCH_REMOTE_IMAGES` | `false` |
 
 Provider base URLs are fixed in code for this version. Custom and local
 endpoints can be added later if there is a real need.
@@ -705,11 +701,11 @@ Reach for OCR only after link params and alt text have failed.
 | Source | Tracking impact |
 |---|---|
 | Inline `cid:` attachments | **None** — served by Google |
-| Remote CDN images | Registers an open with the sender |
+| Remote CDN images | **Not fetched in this version** — would register an open |
 
-Prefer inline. For remote, filter before fetching: drop anything under
-200×100px or ~6KB, and anything matching logo/icon/pixel/social. Take the
-largest one or two by area — the hero banner carries the code.
+Read only inline Gmail image parts in this version. They are ranked by declared
+size, with template furniture filtered before OCR. Remote image support is
+deferred until the product has an explicit, user-visible permission flow.
 
 Preprocessing is what makes Tesseract usable on banners: flatten alpha onto
 white, upscale 2–3×, grayscale, Otsu threshold, detect polarity so
@@ -719,13 +715,13 @@ light-on-dark text gets inverted. Without it you get `M0NS00N4O` instead of
 Tesseract core and `eng.traineddata` must be **bundled** — MV3 blocks remotely
 hosted code at runtime, not just by policy. Budget 12–15MB.
 
-Given that weight in a repo people clone, **keep OCR an optional module**:
-default `ENABLE_OCR=false`, vendored files in a separate directory, documented
-as opt-in.
+OCR is included in the extraction cascade only after text stages fail, and the
+offscreen document is created on demand. Its engine is bundled separately and
+closed after each sync slice so it does not retain memory between runs.
 
 Phase 7 adds the `"offscreen"` manifest permission and creates the document
 with `chrome.offscreen.Reason.WORKERS` plus a specific justification such as
-"Run bundled Tesseract OCR for opted-in coupon image extraction." Do not request
+"Run bundled Tesseract OCR for inline coupon image extraction." Do not request
 `DOM_PARSER`: HTML candidate extraction remains browser-independent. Add other
 offscreen reasons only if the implemented OCR path actually requires them.
 
@@ -739,7 +735,7 @@ an OCR request to a hidden `offscreen.html` document; that document has a normal
 text back through `chrome.runtime` messaging. `Reason.WORKERS` tells Chrome that
 spawning this worker is the specific reason the hidden document is required.
 Close the offscreen document and terminate the Tesseract worker after the OCR
-queue becomes idle so the optional feature does not retain memory indefinitely.
+queue becomes idle so the feature does not retain memory indefinitely.
 
 ---
 
@@ -952,11 +948,9 @@ display codes. Not acceptable if you add auto-apply at checkout.
 
 ### Request hygiene
 
-- Fetch retailer CDNs with credentials omitted and no referrer. No reason to
-  hand them your cookies.
-- Remote image fetches register opens with senders. Defensible — you asked for
-  your own coupons and would otherwise open each email by hand — but it's why
-  `FETCH_REMOTE_IMAGES` is a documented setting rather than a silent default.
+- Do not fetch retailer CDNs. OCR reads only Gmail-provided inline image parts,
+  so the extension does not register opens with senders or request blanket host
+  access.
 - Never commit `.env`. Rotate the key if it ever lands in git history; scrubbing
   a commit is not the same as the key being unseen.
 
@@ -997,11 +991,10 @@ That's a satisfying amount of working product before you configure anything.
 - `src/llm/` — adapter interface plus `anthropic.ts`, `openai.ts` and `gemini.ts`
 - `test/fixtures/emails/` — sanitized Gmail `format=full` JSON and expected extraction JSON
 - `test/fixtures/providers/` — saved success, refusal, malformed and rate-limit responses
-- Settings page — provider, key, model, backfill window, OCR toggle,
-  remote-image toggle and a clear notice that relevant email text is sent to
-  the selected provider
+- Settings page — provider, key and model, plus a clear notice that relevant
+  email text is sent to the selected provider
 - Permissive license (MIT or Apache-2.0) since store-clone risk no longer applies
-- OCR vendor files in their own directory, documented as opt-in
+- OCR vendor files in their own directory, documented as local inline-image OCR
 
 ---
 

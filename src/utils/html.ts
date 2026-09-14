@@ -106,7 +106,10 @@ export function extractTagAttributes(html: string, tag: string): Record<string, 
   const tags = new RegExp(`<${tag}\\b([^>]*)>`, 'gi')
   const attribute = /([a-zA-Z_:][-\w:.]*)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/g
 
-  return [...html.matchAll(tags)].map((match) => {
+  // Same stripping as every other scanner here: ESP templates park whole
+  // `<img>` blocks inside MSO conditional comments, and an image nobody is
+  // shown must not cost a CDN fetch or one of the two OCR slots.
+  return [...stripNonContent(html).matchAll(tags)].map((match) => {
     const attributes: Record<string, string> = {}
     for (const found of (match[1] ?? '').matchAll(attribute)) {
       const name = (found[1] ?? '').toLowerCase()

@@ -1,4 +1,11 @@
 import type { OfferRecord } from '../types/storage.js'
+
+/** First date that remains in the local expiry grace window. */
+export function expiryRetentionCutoff(now: Date, graceDays: number = 30): string {
+  const cutoff = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
+  cutoff.setUTCDate(cutoff.getUTCDate() - graceDays)
+  return cutoff.toISOString().slice(0, 10)
+}
 import type { ExpiryState } from '../types/offers.js'
 
 /** Expiry is stored as a date and evaluated whenever offers are rendered. */

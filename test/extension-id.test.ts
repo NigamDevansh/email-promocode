@@ -31,10 +31,6 @@ test('the packaged extension can call Gmail and every supported LLM provider', (
     'https://api.anthropic.com/*',
     'https://api.openai.com/*',
     'https://generativelanguage.googleapis.com/*',
-    // OCR reads banners hosted on arbitrary retailer CDNs, so the image fetch
-    // cannot be narrowed to a fixed host list. Deliberate and broad: if this
-    // line ever disappears, image-only coupons stop being found.
-    'https://*/*',
   ])
   assert.ok(manifest.permissions?.includes('alarms'), 'background sync needs the alarms permission')
   assert.ok(

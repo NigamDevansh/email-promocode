@@ -126,6 +126,29 @@ export const indexedDbStore: Store = {
     await done
   },
 
+  async deleteExpiredOffers(before) {
+    const db = await database()
+    const transaction = db.transaction(OFFERS, 'readwrite')
+    const done = new Promise<void>((resolve, reject) => {
+      transaction.oncomplete = () => resolve()
+      transaction.onerror = () => reject(transaction.error)
+      transaction.onabort = () => reject(transaction.error ?? new Error('expired-offer cleanup aborted'))
+    })
+
+    const expiry = transaction.objectStore(OFFERS).index('expiry')
+    const request = expiry.openCursor(IDBKeyRange.upperBound(before, true))
+    request.onsuccess = () => {
+      const cursor = request.result
+      if (!cursor) return
+
+      const offer = cursor.value as OfferRecord
+      // The index is chronological because validated dates are YYYY-MM-DD.
+      if (typeof offer.expiry === 'string' && offer.expiry < before) cursor.delete()
+      cursor.continue()
+    }
+    await done
+  },
+
   async listChatTurns() {
     const db = await database()
     const transaction = db.transaction(CHAT, 'readonly')

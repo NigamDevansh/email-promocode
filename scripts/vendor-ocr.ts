@@ -16,7 +16,13 @@ import { fileURLToPath } from 'node:url'
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const target = resolve(root, 'public/vendor/tesseract')
 
-/** LSTM-only SIMD build: the smallest core that still reads banner text well. */
+/**
+ * LSTM-only SIMD build: the smallest core that still reads banner text well.
+ *
+ * `tesseract.js-core` is declared in package.json even though `tesseract.js`
+ * already pulls it in: this script reads the files by path, and a transitive
+ * dependency npm is free to nest is not a path worth depending on.
+ */
 const FROM_NODE_MODULES = [
   ['tesseract.js/dist/worker.min.js', 'worker.min.js'],
   ['tesseract.js-core/tesseract-core-simd-lstm.wasm', 'tesseract-core-simd-lstm.wasm'],

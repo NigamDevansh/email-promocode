@@ -44,8 +44,13 @@ export function usableOcrText(result: OcrResult): string {
     .join(' ')
 }
 
+/** Mean of a set of confidences, or 0 for none of them. */
+export function meanOf(values: readonly number[]): number {
+  if (values.length === 0) return 0
+  return values.reduce((total, value) => total + value, 0) / values.length
+}
+
 /** Mean confidence across words, used when a provider does not report one. */
 export function meanConfidenceOf(words: readonly OcrWord[]): number {
-  if (words.length === 0) return 0
-  return words.reduce((total, word) => total + word.confidence, 0) / words.length
+  return meanOf(words.map((word) => word.confidence))
 }

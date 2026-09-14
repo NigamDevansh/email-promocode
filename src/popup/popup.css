@@ -1,15 +1,27 @@
+/*
+ * The palette is Gmail's, so the popup reads as part of the mailbox it is
+ * summarising rather than as a separate product: Google Blue for anything
+ * actionable, Gmail's greys for everything else, and the brand red kept for
+ * the mail mark alone.
+ */
 :root {
   color-scheme: light;
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  color: #17211a;
+  font-family: Roboto, "Google Sans", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", Arial, sans-serif;
+  color: #202124;
   background: #ffffff;
-  --green: #238451;
-  --green-strong: #17663d;
-  --green-soft: #eaf7ef;
-  --surface: #f6f8f6;
-  --border: #dfe6e1;
-  --muted: #657169;
-  --danger: #b42318;
+  --blue: #1a73e8;
+  --blue-strong: #1765cc;
+  --blue-deep: #174ea6;
+  --blue-soft: #e8f0fe;
+  --blue-line: #d2e3fc;
+  --red: #ea4335;
+  --red-soft: #fce8e6;
+  --surface: #f6f8fc;
+  --hover: #f1f3f4;
+  --border: #dadce0;
+  --muted: #5f6368;
+  --danger: #d93025;
 }
 
 * {
@@ -28,7 +40,7 @@ body {
 body {
   display: flex;
   flex-direction: column;
-  -webkit-tap-highlight-color: rgba(35, 132, 81, 0.14);
+  -webkit-tap-highlight-color: rgba(26, 115, 232, 0.14);
 }
 
 button,
@@ -43,10 +55,19 @@ textarea {
 }
 
 button:focus-visible,
-textarea:focus-visible,
 a:focus-visible {
-  outline: 3px solid rgba(35, 132, 81, 0.3);
+  outline: 3px solid rgba(26, 115, 232, 0.35);
   outline-offset: 2px;
+}
+
+/*
+ * The composer is the focus indicator for the textarea inside it: an outline on
+ * the textarea as well draws a second, rectangular ring inside the rounded
+ * pill the moment you click into it.
+ */
+textarea:focus,
+textarea:focus-visible {
+  outline: none;
 }
 
 .skip-link {
@@ -57,7 +78,7 @@ a:focus-visible {
   padding: 8px 10px;
   border-radius: 8px;
   color: #ffffff;
-  background: var(--green-strong);
+  background: var(--blue-deep);
   transform: translateY(-150%);
 }
 
@@ -65,13 +86,15 @@ a:focus-visible {
   transform: translateY(0);
 }
 
+/* ------------------------------------------------------------- loading state */
+
 .sync-strip {
   position: fixed;
   z-index: 10;
   inset: 0 0 auto;
-  height: 4px;
+  height: 3px;
   overflow: hidden;
-  background: #dcefe3;
+  background: var(--blue-soft);
   cursor: help;
 }
 
@@ -80,7 +103,7 @@ a:focus-visible {
   width: 42%;
   height: 100%;
   border-radius: 999px;
-  background: var(--green);
+  background: var(--blue);
   animation: sync-slide 1.25s ease-in-out infinite;
 }
 
@@ -91,7 +114,7 @@ a:focus-visible {
 }
 
 .sync-strip.blocked {
-  background: #fee4e2;
+  background: #fce8e6;
 }
 
 .sync-strip.blocked span {
@@ -109,10 +132,74 @@ a:focus-visible {
   }
 }
 
+/** The first paint, before the service worker has answered with any state. */
+.loading-view {
+  display: grid;
+  height: 100%;
+  place-items: center;
+  align-content: center;
+  gap: 16px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.loading-view[hidden] {
+  display: none;
+}
+
+.spinner {
+  width: 30px;
+  height: 30px;
+  border: 3px solid var(--blue-soft);
+  border-top-color: var(--blue);
+  border-radius: 50%;
+  animation: spin 0.85s linear infinite;
+}
+
+/** The header's own marker, so "still updating" is visible and not just text. */
+.inline-spinner {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 5px;
+  border: 2px solid var(--blue-line);
+  border-top-color: var(--blue);
+  border-radius: 50%;
+  vertical-align: -1px;
+  animation: spin 0.85s linear infinite;
+}
+
+.inline-spinner[hidden] {
+  display: none;
+}
+
+.inline-spinner.waiting {
+  border-color: var(--border);
+  border-top-color: var(--muted);
+  animation-duration: 2.4s;
+}
+
+.inline-spinner.blocked {
+  border-color: #f6c7c3;
+  border-top-color: var(--danger);
+  animation: none;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .sync-strip span {
     width: 100%;
     animation: none;
+  }
+
+  .spinner,
+  .inline-spinner {
+    animation-duration: 3s;
   }
 
   .conversation {
@@ -120,14 +207,20 @@ a:focus-visible {
   }
 }
 
+/* ------------------------------------------------------------------- header */
+
 .app-header {
   display: flex;
   flex: 0 0 auto;
   align-items: flex-start;
   justify-content: space-between;
   min-height: 76px;
-  padding: 17px 18px 13px 20px;
+  padding: 17px 14px 13px 20px;
   border-bottom: 1px solid var(--border);
+}
+
+.app-title {
+  min-width: 0;
 }
 
 h1,
@@ -157,18 +250,21 @@ h1 {
   padding: 0;
   place-items: center;
   border: 1px solid transparent;
-  border-radius: 10px;
-  color: #465149;
+  border-radius: 50%;
+  color: #444746;
   background: transparent;
   cursor: pointer;
 }
 
 .icon-button:hover {
-  border-color: var(--border);
-  background: var(--surface);
+  background: var(--hover);
 }
 
-.icon-button svg,
+.icon-emoji {
+  font-size: 17px;
+  line-height: 1;
+}
+
 .send-button svg {
   fill: currentColor;
 }
@@ -177,6 +273,8 @@ main {
   min-height: 0;
   flex: 1;
 }
+
+/* ------------------------------------------------------------- connect view */
 
 .connect-view {
   display: grid;
@@ -198,11 +296,13 @@ main {
   height: 58px;
   margin-bottom: 20px;
   place-items: center;
-  border-radius: 18px;
-  color: var(--green-strong);
-  background: var(--green-soft);
-  font-size: 25px;
-  font-weight: 700;
+  border-radius: 50%;
+  color: var(--red);
+  background: var(--red-soft);
+}
+
+.connect-mark svg {
+  fill: currentColor;
 }
 
 .connect-view h2 {
@@ -228,15 +328,22 @@ main {
   margin-top: 25px;
   padding: 10px 18px;
   border: 0;
-  border-radius: 11px;
+  border-radius: 999px;
   color: #ffffff;
-  background: var(--green);
-  font-weight: 650;
+  background: var(--blue);
+  font-weight: 500;
+  letter-spacing: 0.01em;
   cursor: pointer;
+  box-shadow: 0 1px 2px rgba(60, 64, 67, 0.3), 0 1px 3px 1px rgba(60, 64, 67, 0.15);
 }
 
 .primary-button:hover {
-  background: var(--green-strong);
+  background: var(--blue-strong);
+  box-shadow: 0 1px 3px rgba(60, 64, 67, 0.3), 0 4px 8px 3px rgba(60, 64, 67, 0.15);
+}
+
+.primary-button:active {
+  background: var(--blue-deep);
 }
 
 .primary-button:disabled,
@@ -251,6 +358,8 @@ main {
   color: var(--danger);
   font-size: 12px;
 }
+
+/* ---------------------------------------------------------------- chat view */
 
 .chat-view {
   display: flex;
@@ -287,6 +396,14 @@ main {
   gap: 8px;
 }
 
+/*
+ * Bubbles hug their text instead of stretching to the column: a two-word reply
+ * in a bubble the width of the popup reads as a banner, not as an answer.
+ */
+.turn-assistant {
+  align-items: flex-start;
+}
+
 .turn-user {
   align-items: flex-end;
 }
@@ -303,12 +420,57 @@ main {
 .turn-user .bubble {
   border-bottom-right-radius: 4px;
   color: #ffffff;
-  background: var(--green);
+  background: var(--blue);
 }
 
 .turn-assistant .bubble {
   border-bottom-left-radius: 4px;
-  background: var(--surface);
+  background: var(--hover);
+}
+
+/** Three dots in an assistant bubble: the answer is being written right here. */
+.bubble-typing {
+  display: flex;
+  width: max-content;
+  align-items: center;
+  gap: 4px;
+  padding: 14px 13px;
+}
+
+.bubble-typing span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #9aa0a6;
+  animation: typing 1.2s ease-in-out infinite;
+}
+
+.bubble-typing span:nth-child(2) {
+  animation-delay: 0.16s;
+}
+
+.bubble-typing span:nth-child(3) {
+  animation-delay: 0.32s;
+}
+
+@keyframes typing {
+  0%,
+  60%,
+  100% {
+    opacity: 0.3;
+    transform: translateY(0);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bubble-typing span {
+    animation: none;
+    opacity: 0.55;
+  }
 }
 
 .offer-card {
@@ -331,17 +493,17 @@ main {
   min-width: 0;
   overflow: hidden;
   font-size: 12px;
-  font-weight: 650;
+  font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .offer-code {
   padding: 5px 8px;
-  border: 1px solid #b9d8c4;
+  border: 1px solid var(--blue-line);
   border-radius: 7px;
-  color: var(--green-strong);
-  background: var(--green-soft);
+  color: var(--blue-deep);
+  background: var(--blue-soft);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 12px;
   font-weight: 700;
@@ -350,7 +512,7 @@ main {
 }
 
 .offer-code:hover {
-  border-color: var(--green);
+  border-color: var(--blue);
 }
 
 .offer-detail {
@@ -364,7 +526,7 @@ main {
 .offer-source {
   display: inline-block;
   margin-top: 7px;
-  color: var(--green-strong);
+  color: var(--blue);
   font-size: 11.5px;
   text-decoration: none;
 }
@@ -378,16 +540,16 @@ main {
   margin: 0 16px;
   padding: 7px 7px 7px 12px;
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: 24px;
   background: #ffffff;
-  box-shadow: 0 8px 24px rgba(32, 55, 41, 0.08);
+  box-shadow: 0 1px 3px rgba(60, 64, 67, 0.15);
   align-items: flex-end;
   gap: 8px;
 }
 
 .composer:focus-within {
-  border-color: var(--green);
-  box-shadow: 0 0 0 3px rgba(35, 132, 81, 0.12);
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.24);
 }
 
 textarea {
@@ -398,23 +560,23 @@ textarea {
   flex: 1;
   resize: none;
   border: 0;
-  color: #17211a;
+  color: #202124;
   background: transparent;
   line-height: 1.4;
 }
 
 textarea::placeholder {
-  color: #8b958e;
+  color: #80868b;
 }
 
 .send-button {
   flex: 0 0 auto;
   color: #ffffff;
-  background: var(--green);
+  background: var(--blue);
 }
 
 .send-button:hover {
-  background: var(--green-strong);
+  background: var(--blue-strong);
 }
 
 .chat-status {

@@ -92,6 +92,8 @@ export interface Store {
   commitMessage(record: ProcessedRecord, offers: OfferRecord[]): Promise<void>
   listOffers(): Promise<OfferRecord[]>
   deleteStaleOffers(extractorVersion: number, requireLlm: boolean): Promise<void>
+  /** Removes offers whose known expiry is before the supplied ISO calendar day. */
+  deleteExpiredOffers(before: string): Promise<void>
   listChatTurns(): Promise<ChatTurnRecord[]>
   replaceChatTurns(turns: readonly ChatTurnRecord[]): Promise<void>
   getMeta<T>(key: string): Promise<T | undefined>

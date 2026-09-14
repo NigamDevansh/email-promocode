@@ -6,11 +6,13 @@ import type { OfferRecord } from '../src/types/storage.ts'
 import {
   describeConditions,
   describeExpiry,
+  expiryRetentionCutoff,
   expiryStateOf,
   formatMoney,
 } from '../src/utils/expiry.ts'
 import { buildOffers, mergeOffer } from '../src/utils/offers.ts'
 import { EXTRACTOR_VERSION } from '../src/utils/storage.ts'
+import { createMemoryStore } from './helpers/memory-store.ts'
 
 const TODAY = new Date(2026, 8, 14, 12)
 
@@ -196,6 +198,26 @@ test('expiry descriptions name the deadline rather than hiding it', () => {
   assert.equal(describeExpiry(expiryStateOf(null, TODAY)), 'No expiry given')
 })
 
+test('expiry cleanup keeps a 30-day grace window using calendar dates', () => {
+  assert.equal(expiryRetentionCutoff(new Date(Date.UTC(2026, 8, 14))), '2026-08-15')
+})
+
+test('expiry cleanup removes only offers beyond the grace window', async () => {
+  const store = createMemoryStore()
+  await store.commitMessage({
+    messageId: 'm1', threadId: 't1', extractorVersion: EXTRACTOR_VERSION,
+    llmProcessed: true, status: 'candidates', processedAt: 0, candidates: [],
+  }, [offer({ normalizedCode: 'OLD', code: 'OLD', expiry: '2026-08-14' }),
+    offer({ normalizedCode: 'EDGE', code: 'EDGE', expiry: '2026-08-15' }),
+    offer({ normalizedCode: 'UNKNOWN', code: 'UNKNOWN', expiry: null })])
+
+  await store.deleteExpiredOffers('2026-08-15')
+
+  assert.deepEqual((await store.listOffers()).map((item) => item.normalizedCode).sort(), [
+    'EDGE', 'UNKNOWN',
+  ])
+})
+
 test('money is formatted with the offer currency, not a hardcoded symbol', () => {
   assert.equal(formatMoney(2000, 'INR'), '₹2,000')
   assert.equal(formatMoney(50, 'USD'), '$50')
@@ -210,4 +232,3 @@ test('blocking conditions are surfaced alongside a code', () => {
   )
   assert.equal(describeConditions(offer()), null)
 })
-

@@ -54,6 +54,12 @@ export function createMemoryStore(): MemoryStore {
       }
     },
 
+    async deleteExpiredOffers(before) {
+      for (const [key, offer] of offers) {
+        if (offer.expiry !== null && offer.expiry < before) offers.delete(key)
+      }
+    },
+
     async listChatTurns() {
       return [...chat.values()].sort((left, right) => left.createdAt - right.createdAt)
     },

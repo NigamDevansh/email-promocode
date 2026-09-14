@@ -19,6 +19,7 @@ export async function extractMessageOffers(
   message: ParsedMessage,
   candidates: readonly Candidate[],
   deps: ExtractionDeps,
+  ocrText?: string,
 ): Promise<ExtractionRun> {
   const allowed = new Map(candidates.map((candidate) => [candidate.normalized, candidate.code]))
 
@@ -26,7 +27,7 @@ export async function extractMessageOffers(
     deps.adapter.complete(
       {
         system: EXTRACTION_SYSTEM_PROMPT,
-        user: buildExtractionPrompt(message, [...candidates]),
+        user: buildExtractionPrompt(message, [...candidates], ocrText),
         schema: EXTRACTION_SCHEMA,
         schemaName: EXTRACTION_SCHEMA_NAME,
         maxTokens: MAX_OUTPUT_TOKENS,

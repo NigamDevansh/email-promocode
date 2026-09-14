@@ -189,6 +189,17 @@ test('the prompt includes plain text and visible HTML details', () => {
   assert.match(prompt, /CANDIDATE CODES: Save20/, 'the source casing is sent to the model')
 })
 
+test('the prompt includes OCR evidence for image-only offer details', () => {
+  const prompt = buildExtractionPrompt(
+    message({ text: '', html: '<p>Monsoon sale</p>' }),
+    [{ code: 'RAKE25', normalized: 'RAKE25', source: 'ocr', score: 4 }],
+    'USE CODE RAKE25 FOR 25% OFF. VALID UNTIL 2026-09-30.',
+  )
+
+  assert.match(prompt, /OCR TEXT: USE CODE RAKE25 FOR 25% OFF/)
+  assert.match(prompt, /VALID UNTIL 2026-09-30/)
+})
+
 test('a long plain-text part cannot crowd the HTML surface out of the prompt', () => {
   const prompt = buildExtractionPrompt(
     message({

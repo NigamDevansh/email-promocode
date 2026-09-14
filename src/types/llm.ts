@@ -6,7 +6,6 @@ export interface Settings {
   apiKey: string
   model: string
   backfillDays: number
-  fetchRemoteImages: boolean
 }
 
 /** A JSON Schema subset, enough for the structured-output contracts. */

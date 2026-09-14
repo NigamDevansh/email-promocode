@@ -5,8 +5,10 @@ import { describeConditions, describeExpiry, expiryStateOf } from '../utils/expi
 import { gmailThreadUrl, offerKey } from '../utils/offers.js'
 
 const syncStripEl = document.querySelector<HTMLDivElement>('#syncStrip')!
-const headerStatusEl = document.querySelector<HTMLParagraphElement>('#headerStatus')!
+const headerStatusTextEl = document.querySelector<HTMLSpanElement>('#headerStatusText')!
+const headerSpinnerEl = document.querySelector<HTMLSpanElement>('#headerSpinner')!
 const settingsEl = document.querySelector<HTMLButtonElement>('#settings')!
+const loadingViewEl = document.querySelector<HTMLElement>('#loadingView')!
 const connectViewEl = document.querySelector<HTMLElement>('#connectView')!
 const connectEl = document.querySelector<HTMLButtonElement>('#connect')!
 const connectErrorEl = document.querySelector<HTMLParagraphElement>('#connectError')!
@@ -21,21 +23,36 @@ let chatTurns: ChatTurnRecord[] = []
 let offers: OfferRecord[] = []
 let hasApiKey = false
 let syncTimer: number | undefined
+/** True between sending a question and the answer landing, for the dots. */
+let awaitingAnswer = false
 
 function send(request: PopupRequest): Promise<PopupResponse> {
   return chrome.runtime.sendMessage(request) as Promise<PopupResponse>
 }
 
+/**
+ * The header's progress line. The spinner is the part people actually notice:
+ * "still updating" as plain grey text reads as a caption rather than as work
+ * in progress.
+ */
+function setHeaderStatus(text: string, spinner: '' | 'loading' | 'waiting' | 'blocked' = ''): void {
+  headerStatusTextEl.textContent = text
+  headerSpinnerEl.hidden = spinner === ''
+  headerSpinnerEl.className = `inline-spinner${spinner && spinner !== 'loading' ? ` ${spinner}` : ''}`
+}
+
 function showConnect(message: string = ''): void {
+  loadingViewEl.hidden = true
   connectViewEl.hidden = false
   chatViewEl.hidden = true
   syncStripEl.hidden = true
   connectErrorEl.textContent = message
-  headerStatusEl.textContent = 'Connect once to organize your Promotions coupons.'
+  setHeaderStatus('Connect once to organize your Promotions coupons.')
   if (syncTimer !== undefined) window.clearInterval(syncTimer)
 }
 
 function showChat(): void {
+  loadingViewEl.hidden = true
   connectViewEl.hidden = true
   chatViewEl.hidden = false
   questionEl.focus()
@@ -128,8 +145,28 @@ function renderConversation(): void {
     return wrapper
   })
 
+  if (awaitingAnswer) nodes.push(typingIndicator())
+
   conversationEl.replaceChildren(...nodes)
   nodes.at(-1)?.scrollIntoView({ block: 'end' })
+}
+
+/** An assistant bubble with three dots, so the wait happens where the answer will. */
+function typingIndicator(): HTMLElement {
+  const wrapper = document.createElement('article')
+  wrapper.className = 'turn turn-assistant'
+
+  const bubble = document.createElement('p')
+  bubble.className = 'bubble bubble-typing'
+  bubble.setAttribute('aria-label', 'Finding the best coupon')
+  bubble.append(
+    document.createElement('span'),
+    document.createElement('span'),
+    document.createElement('span'),
+  )
+
+  wrapper.append(bubble)
+  return wrapper
 }
 
 function applySyncStatus(status: SyncStatus): void {
@@ -137,16 +174,18 @@ function applySyncStatus(status: SyncStatus): void {
   syncStripEl.hidden = status.state === 'ready'
 
   if (status.state === 'ready') {
-    headerStatusEl.textContent = hasApiKey
-      ? 'Ask anything about your saved coupons.'
-      : 'Coupons are ready. Add an API key in Settings to chat.'
+    setHeaderStatus(
+      hasApiKey
+        ? 'Ask anything about your saved coupons.'
+        : 'Coupons are ready. Add an API key in Settings to chat.',
+    )
     return
   }
 
   if (status.state === 'blocked') {
     syncStripEl.classList.add('blocked')
     syncStripEl.title = `Coupon loading paused: ${status.message ?? 'check Settings'}`
-    headerStatusEl.textContent = 'Coupon loading needs attention in Settings.'
+    setHeaderStatus('Coupon loading needs attention in Settings.', 'blocked')
     return
   }
 
@@ -158,15 +197,18 @@ function applySyncStatus(status: SyncStatus): void {
         )
       : 'shortly'
     syncStripEl.title = `Coupon loading will resume at ${time}. You can still chat with coupons already found.`
-    headerStatusEl.textContent = 'Coupons are updating in the background.'
+    setHeaderStatus('Coupons are updating in the background.', 'waiting')
     return
   }
 
   syncStripEl.title =
     'Your promotional codes are being loaded. You can still chat with coupons already found.'
-  headerStatusEl.textContent = status.totalProcessed
-    ? `${status.totalProcessed} promotional emails checked. Still updating…`
-    : 'Checking your Promotions coupons…'
+  setHeaderStatus(
+    status.totalProcessed
+      ? `${status.totalProcessed} promotional emails checked. Still updating…`
+      : 'Checking your Promotions coupons…',
+    'loading',
+  )
 }
 
 async function refreshSyncStatus(): Promise<void> {
@@ -257,7 +299,9 @@ chatFormEl.addEventListener('submit', async (event) => {
   questionEl.disabled = true
   sendEl.disabled = true
   chatStatusEl.classList.remove('error')
-  chatStatusEl.textContent = 'Finding the best coupon…'
+  // The dots in the conversation say this now, where the answer will appear.
+  chatStatusEl.textContent = ''
+  awaitingAnswer = true
   renderConversation()
 
   try {
@@ -273,6 +317,7 @@ chatFormEl.addEventListener('submit', async (event) => {
     chatStatusEl.textContent =
       error instanceof Error ? error.message : 'Could not answer. Please try again.'
   } finally {
+    awaitingAnswer = false
     questionEl.disabled = !hasApiKey
     sendEl.disabled = !hasApiKey
     renderConversation()

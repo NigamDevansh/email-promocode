@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import test from 'node:test'
+import test, { type TestContext } from 'node:test'
 import type { BackfillCheckpoint } from '../src/types/storage.ts'
 import {
   rollingRefreshIsDue,
@@ -50,4 +50,30 @@ test('a continuation watchdog is armed before a sync slice can remain in flight'
   finishSlice?.()
   await run
   assert.deepEqual(events, ['watchdog-armed', 'slice-started', 'slice-finished'])
+})
+
+test('a long slice keeps replacing its continuation watchdog', async (t: TestContext) => {
+  t.mock.timers.enable({ apis: ['setInterval'] })
+  let arms = 0
+  let finish: (() => void) | undefined
+  const blocked = new Promise<void>((resolve) => {
+    finish = resolve
+  })
+
+  const run = runWithSyncWatchdog(
+    async () => {
+      arms += 1
+    },
+    async () => await blocked,
+  )
+
+  await Promise.resolve()
+  t.mock.timers.tick(40_000)
+  await Promise.resolve()
+  assert.equal(arms, 3, 'initial arm plus two replacement alarms')
+
+  finish?.()
+  await run
+  t.mock.timers.tick(40_000)
+  assert.equal(arms, 3, 'the timer is cleared when the slice ends')
 })

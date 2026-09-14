@@ -15,7 +15,8 @@
     "check": "npm run typecheck && npm test",
     "extension-id": "node --import=tsx scripts/extension-id.ts",
     "vendor:ocr": "node --import=tsx scripts/vendor-ocr.ts",
-    "prebuild": "npm run vendor:ocr"
+    "prebuild": "npm run vendor:ocr",
+    "predev": "npm run vendor:ocr"
   },
   "devDependencies": {
     "@types/chrome": "^0.2.9",
@@ -26,6 +27,7 @@
   },
   "dependencies": {
     "tesseract.js": "^7.0.0",
+    "tesseract.js-core": "^7.0.0",
     "tldts": "^7.4.13"
   }
 }

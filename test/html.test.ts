@@ -4,6 +4,7 @@ import {
   decodeEntities,
   extractAltTexts,
   extractHrefs,
+  extractTagAttributes,
   extractVisibleText,
 } from '../src/utils/html.ts'
 
@@ -47,4 +48,31 @@ test('does not read links or alt text from comments and script blocks', () => {
 
   assert.deepEqual(extractHrefs(html), [])
   assert.deepEqual(extractAltTexts(html), [])
+})
+
+test('grouped attributes come from the same markup the other scanners see', () => {
+  const html = [
+    '<!--[if mso]><img src="https://x.example/outlook.png" width="600" height="400"><![endif]-->',
+    '<style><img src="https://x.example/css.png"></style>',
+    '<img src="https://x.example/real.png" width="600" height="400" alt="Hero">',
+  ].join('')
+
+  assert.deepEqual(
+    extractTagAttributes(html, 'img').map((attributes) => attributes['src']),
+    ['https://x.example/real.png'],
+    'an image nobody is shown must not cost a fetch',
+  )
+})
+
+test('every attribute of one tag stays together, which is the point of this reader', () => {
+  const [attributes] = extractTagAttributes(
+    `<img src='https://x.example/a.png' WIDTH=600 alt="Save &amp; win">`,
+    'img',
+  )
+
+  assert.deepEqual(attributes, {
+    src: 'https://x.example/a.png',
+    width: '600',
+    alt: 'Save & win',
+  })
 })

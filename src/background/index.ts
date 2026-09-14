@@ -10,10 +10,12 @@ import type {
   SyncStatus,
 } from '../types/messaging.js'
 import type { BackfillCheckpoint, OfferRecord } from '../types/storage.js'
+import type { IncrementalJob } from '../types/incremental.js'
 import { answerCouponQuestion } from '../llm/chat.js'
 import { adapterFor } from '../llm/index.js'
 import { RequestQueue } from '../llm/queue.js'
 import { isConfigured, maskApiKey } from '../utils/settings.js'
+import { expiryRetentionCutoff } from '../utils/expiry.js'
 import { initialCheckpoint, META_KEYS } from '../utils/storage.js'
 import { rollingRefreshIsDue, runWithSyncWatchdog } from '../utils/sync.js'
 import { authStateForError, ReauthRequiredError } from './auth.js'
@@ -22,7 +24,7 @@ import { runIncrementalSlice } from './incremental.js'
 import { chromeTokens, requestAuthToken } from './chrome-tokens.js'
 import { createGmailPort } from './gmail.js'
 import { indexedDbStore } from './idb.js'
-import { readImages } from './ocr.js'
+import { closeOcrEngine, readImages } from './ocr.js'
 import { clearApiKey, readSettings, writeSettings } from './settings.js'
 import { readAuthState, writeAuthState } from './state.js'
 import { syncRetryDelay } from './sync-errors.js'
@@ -107,6 +109,11 @@ async function connect(): Promise<PopupResponse> {
   return { ok: true, authState: 'connected' }
 }
 
+function soonest(...times: (number | undefined)[]): number | undefined {
+  const known = times.filter((time): time is number => typeof time === 'number')
+  return known.length > 0 ? Math.min(...known) : undefined
+}
+
 async function runSync(): Promise<SyncProgress> {
   const settings = await readSettings()
   const revision = settingsRevision
@@ -120,37 +127,42 @@ async function runSync(): Promise<SyncProgress> {
     ocr: readImages,
     llm: isConfigured(settings)
       ? {
-          adapter: adapterFor(settings.provider),
-          settings,
-          queue: llmQueue,
-          fetchImpl: (...args: Parameters<typeof fetch>) => fetch(...args),
-        }
+        adapter: adapterFor(settings.provider),
+        settings,
+        queue: llmQueue,
+        fetchImpl: (...args: Parameters<typeof fetch>) => fetch(...args),
+      }
       : undefined,
   }
 
-  // §6 step 7: new mail first, then a bounded slice of the older backfill, so
-  // today's coupons never wait behind hundreds of historical messages.
-  const incremental = await runIncrementalSlice({ ...shared, budget: SLICE_BUDGET })
+  try {
+    await indexedDbStore.deleteExpiredOffers(expiryRetentionCutoff(new Date()))
+    // §6 step 7: new mail first, then a bounded slice of the older backfill, so
+    // today's coupons never wait behind hundreds of historical messages.
+    const incremental = await runIncrementalSlice({ ...shared, budget: SLICE_BUDGET })
 
-  if (incremental.fullSyncRequired) {
-    // The cursor outlived Gmail's retention. §6 calls the 45-day re-list routine.
-    await indexedDbStore.setMeta(META_KEYS.backfill, undefined)
-  }
+    if (incremental.fullSyncRequired) {
+      // The cursor outlived Gmail's retention. §6 calls the 45-day re-list routine.
+      await indexedDbStore.setMeta(META_KEYS.backfill, undefined)
+    }
 
-  const result = await runBackfillSlice({
-    ...shared,
-    budget: Math.max(0, SLICE_BUDGET - incremental.processed),
-  })
-  const checkpoint = await indexedDbStore.getMeta<BackfillCheckpoint>(META_KEYS.backfill)
+    const result = await runBackfillSlice({
+      ...shared,
+      budget: Math.max(0, SLICE_BUDGET - incremental.processed),
+    })
+    const checkpoint = await indexedDbStore.getMeta<BackfillCheckpoint>(META_KEYS.backfill)
 
-  return {
-    processed: result.processed + incremental.processed,
-    skipped: result.skipped,
-    withCandidates: result.withCandidates,
-    totalProcessed: checkpoint?.processedCount ?? 0,
-    remaining: result.remaining || incremental.remaining,
-    nextAttemptAt: result.nextAttemptAt ?? incremental.nextAttemptAt,
-    error: result.error ?? incremental.error,
+    return {
+      processed: result.processed + incremental.processed,
+      skipped: result.skipped,
+      withCandidates: result.withCandidates,
+      totalProcessed: checkpoint?.processedCount ?? 0,
+      remaining: result.remaining || incremental.remaining,
+      nextAttemptAt: soonest(result.nextAttemptAt, incremental.nextAttemptAt),
+      error: result.error ?? incremental.error,
+    }
+  } finally {
+    await closeOcrEngine().catch(() => undefined)
   }
 }
 
@@ -219,8 +231,9 @@ async function runAutomaticSync(): Promise<void> {
 }
 
 async function syncStatus(): Promise<SyncStatus> {
-  const [checkpoint, settings, blocked] = await Promise.all([
+  const [checkpoint, incremental, settings, blocked] = await Promise.all([
     indexedDbStore.getMeta<BackfillCheckpoint>(META_KEYS.backfill),
+    indexedDbStore.getMeta<IncrementalJob>(META_KEYS.incremental),
     readSettings(),
     indexedDbStore.getMeta<string | null>(META_KEYS.syncBlocked),
   ])
@@ -230,14 +243,22 @@ async function syncStatus(): Promise<SyncStatus> {
   if (inFlightSync) return { state: 'loading', totalProcessed }
 
   const needsLlmPass = isConfigured(settings) && checkpoint?.llmProcessed !== true
-  const hasWork = !checkpoint || checkpoint.status !== 'complete' || needsLlmPass
+  const hasWork =
+    !checkpoint ||
+    checkpoint.status !== 'complete' ||
+    needsLlmPass ||
+    incremental !== undefined
   if (!hasWork) return { state: 'ready', totalProcessed }
 
-  if (checkpoint?.nextAttemptAt && checkpoint.nextAttemptAt > Date.now()) {
+  const nextAttemptAt = soonest(
+    checkpoint?.nextAttemptAt ?? undefined,
+    incremental?.nextAttemptAt ?? undefined,
+  )
+  if (nextAttemptAt && nextAttemptAt > Date.now()) {
     return {
       state: 'waiting',
       totalProcessed,
-      nextAttemptAt: checkpoint.nextAttemptAt,
+      nextAttemptAt,
     }
   }
   return { state: 'loading', totalProcessed }
