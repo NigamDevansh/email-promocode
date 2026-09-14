@@ -8,6 +8,7 @@ export const META_KEYS = {
   historyId: 'historyId',
   authState: 'authState',
   lastSync: 'lastSync',
+  syncBlocked: 'syncBlocked',
 } as const
 
 export function initialCheckpoint(query: string): BackfillCheckpoint {
@@ -20,6 +21,7 @@ export function initialCheckpoint(query: string): BackfillCheckpoint {
     extractorVersion: EXTRACTOR_VERSION,
     llmProcessed: false,
     nextAttemptAt: null,
+    syncAttempts: 0,
     attempts: {},
   }
 }

@@ -1,18 +1,9 @@
 import type { ProviderId, Settings } from './llm.js'
+import type { ChatTurnRecord } from './chat.js'
 import type { OfferRecord } from './storage.js'
 
 /** Auth states the popup can render. Mirrors §5 of the design doc. */
 export type AuthState = 'disconnected' | 'connected' | 'reauth_required'
-
-/** One Promotions message, reduced to what the popup preview displays. */
-export interface MessageSummary {
-  id: string
-  threadId: string
-  subject: string
-  from: string
-  /** Gmail internalDate, milliseconds since epoch. */
-  date: number
-}
 
 /** One backfill slice's outcome, surfaced to the popup. */
 export interface SyncProgress {
@@ -25,12 +16,19 @@ export interface SyncProgress {
   error?: string
 }
 
+export interface SyncStatus {
+  state: 'loading' | 'waiting' | 'ready' | 'blocked'
+  totalProcessed: number
+  nextAttemptAt?: number
+  message?: string
+}
+
 export type PopupRequest =
   | { type: 'get-state' }
   | { type: 'connect' }
-  | { type: 'list-messages' }
-  | { type: 'sync' }
-  | { type: 'list-offers' }
+  | { type: 'get-sync-status' }
+  | { type: 'get-chat' }
+  | { type: 'send-chat'; question: string }
   | { type: 'get-settings' }
   | { type: 'save-settings'; settings: Partial<Settings> }
   | { type: 'clear-api-key' }
@@ -39,9 +37,10 @@ export type PopupResponse =
   | {
       ok: true
       authState: AuthState
-      messages?: MessageSummary[]
       progress?: SyncProgress
+      syncStatus?: SyncStatus
       offers?: OfferRecord[]
+      chatTurns?: ChatTurnRecord[]
       settings?: SettingsView
     }
   | { ok: false; authState: AuthState; error: string }
@@ -53,9 +52,6 @@ export type PopupResponse =
 export interface SettingsView {
   provider: ProviderId
   model: string
-  backfillDays: number
-  enableOcr: boolean
-  fetchRemoteImages: boolean
   hasApiKey: boolean
   apiKeyMasked: string
 }

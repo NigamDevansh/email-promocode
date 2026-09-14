@@ -1,42 +1,81 @@
+import type { AuthorizedFetchDeps } from '../types/auth.js'
+import type { ChatTurnRecord } from '../types/chat.js'
+import type { Settings } from '../types/llm.js'
 import type {
   AuthState,
   PopupRequest,
   PopupResponse,
   SettingsView,
   SyncProgress,
+  SyncStatus,
 } from '../types/messaging.js'
-import type { AuthorizedFetchDeps } from '../types/auth.js'
-import type { Settings } from '../types/llm.js'
-import { maskApiKey } from '../utils/settings.js'
-import type { BackfillCheckpoint } from '../types/storage.js'
-import { META_KEYS } from '../utils/storage.js'
-import { authStateForError, ReauthRequiredError } from './auth.js'
+import type { BackfillCheckpoint, OfferRecord } from '../types/storage.js'
+import { answerCouponQuestion } from '../llm/chat.js'
 import { adapterFor } from '../llm/index.js'
 import { RequestQueue } from '../llm/queue.js'
-import { isConfigured } from '../utils/settings.js'
+import { isConfigured, maskApiKey } from '../utils/settings.js'
+import { initialCheckpoint, META_KEYS } from '../utils/storage.js'
+import { rollingRefreshIsDue, runWithSyncWatchdog } from '../utils/sync.js'
+import { authStateForError, ReauthRequiredError } from './auth.js'
 import { runBackfillSlice } from './backfill.js'
 import { chromeTokens, requestAuthToken } from './chrome-tokens.js'
-import { createGmailPort, listPromotionSummaries } from './gmail.js'
+import { createGmailPort } from './gmail.js'
 import { indexedDbStore } from './idb.js'
 import { clearApiKey, readSettings, writeSettings } from './settings.js'
 import { readAuthState, writeAuthState } from './state.js'
+import { syncRetryDelay } from './sync-errors.js'
 
-/** Keep the popup preview small; the backfill uses its own paginated listing. */
-const POPUP_MESSAGE_LIMIT = 25
-
-/** Section 6: bounded work per wake, so a checkpoint always lands before Chrome stops the worker. */
 const SLICE_BUDGET = 15
+const CHAT_HISTORY_LIMIT = 20
+const PERIODIC_SYNC_ALARM = 'periodic-coupon-sync'
+const RESUME_SYNC_ALARM = 'resume-coupon-sync'
 
-const deps: AuthorizedFetchDeps = {
+const gmailDeps: AuthorizedFetchDeps = {
   tokens: chromeTokens,
   fetchImpl: (...args) => fetch(...args),
   onReauthRequired: () => writeAuthState('reauth_required'),
 }
 
-/**
- * Silent probe on popup open. A stored `reauth_required` is terminal and is not
- * re-probed: only the Connect gesture leaves that state.
- */
+const llmQueue = new RequestQueue({
+  minSpacingMs: 1200,
+  now: () => Date.now(),
+  sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+})
+
+let settingsRevision = 0
+let inFlightSync: Promise<SyncProgress> | undefined
+let chatTail: Promise<void> = Promise.resolve()
+
+async function ensurePeriodicSync(): Promise<void> {
+  if (await chrome.alarms.get(PERIODIC_SYNC_ALARM)) return
+  await chrome.alarms.create(PERIODIC_SYNC_ALARM, {
+    delayInMinutes: 5,
+    periodInMinutes: 5,
+  })
+}
+
+async function scheduleSync(when: number = Date.now() + 30_000): Promise<void> {
+  await chrome.alarms.create(RESUME_SYNC_ALARM, {
+    when: Math.max(Date.now() + 30_000, when),
+  })
+}
+
+async function requestRefreshIfDue(force: boolean = false): Promise<void> {
+  if (inFlightSync) return
+
+  const [checkpoint, lastSync, settings] = await Promise.all([
+    indexedDbStore.getMeta<BackfillCheckpoint>(META_KEYS.backfill),
+    indexedDbStore.getMeta<number>(META_KEYS.lastSync),
+    readSettings(),
+  ])
+  if (!rollingRefreshIsDue(checkpoint, lastSync, Date.now(), force)) return
+
+  await indexedDbStore.setMeta(
+    META_KEYS.backfill,
+    initialCheckpoint(`newer_than:${settings.backfillDays}d`),
+  )
+}
+
 async function currentAuthState(): Promise<AuthState> {
   const stored = await readAuthState()
   if (stored === 'reauth_required') return stored
@@ -47,42 +86,31 @@ async function currentAuthState(): Promise<AuthState> {
   return state
 }
 
-/** Interactive auth runs only from the Connect gesture in the popup. */
 async function connect(): Promise<PopupResponse> {
   const { token, error } = await requestAuthToken(true)
-
-  if (token) {
-    await writeAuthState('connected')
-    return { ok: true, authState: 'connected' }
+  if (!token) {
+    await writeAuthState('disconnected')
+    return {
+      ok: false,
+      authState: 'disconnected',
+      error: error ?? 'Google sign-in was dismissed before it completed.',
+    }
   }
 
-  await writeAuthState('disconnected')
-  return {
-    ok: false,
-    authState: 'disconnected',
-    error: error ?? 'Google sign-in was dismissed before it completed.',
-  }
+  await writeAuthState('connected')
+  await indexedDbStore.setMeta(META_KEYS.syncBlocked, null)
+  await requestRefreshIfDue(true)
+  await scheduleSync()
+  void runAutomaticSync()
+  return { ok: true, authState: 'connected' }
 }
-
-/**
- * §6: one provider queue for the whole worker. Chat will share this instance so
- * an interactive turn can jump ahead of queued backfill work.
- */
-const llmQueue = new RequestQueue({
-  minSpacingMs: 1200,
-  now: () => Date.now(),
-  sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
-})
-
-let settingsRevision = 0
 
 async function runSync(): Promise<SyncProgress> {
   const settings = await readSettings()
   const revision = settingsRevision
-
   const result = await runBackfillSlice({
     store: indexedDbStore,
-    gmail: createGmailPort(deps),
+    gmail: createGmailPort(gmailDeps),
     now: () => Date.now(),
     shouldContinue: () => revision === settingsRevision,
     budget: SLICE_BUDGET,
@@ -96,7 +124,6 @@ async function runSync(): Promise<SyncProgress> {
         }
       : undefined,
   })
-
   const checkpoint = await indexedDbStore.getMeta<BackfillCheckpoint>(META_KEYS.backfill)
 
   return {
@@ -110,12 +137,6 @@ async function runSync(): Promise<SyncProgress> {
   }
 }
 
-let inFlightSync: Promise<SyncProgress> | undefined
-
-/**
- * Section 6: coalesce overlapping requests into the run already in flight.
- * There is only one extension service-worker instance, so no lock is needed.
- */
 function syncOnce(): Promise<SyncProgress> {
   inFlightSync ??= runSync().finally(() => {
     inFlightSync = undefined
@@ -123,76 +144,238 @@ function syncOnce(): Promise<SyncProgress> {
   return inFlightSync
 }
 
-/** Strips the stored key down to a mask before it leaves the worker. */
-function viewOf(settings: Settings): SettingsView {
+async function persistSyncRetry(error: unknown): Promise<boolean> {
+  const [checkpoint, settings] = await Promise.all([
+    indexedDbStore.getMeta<BackfillCheckpoint>(META_KEYS.backfill),
+    readSettings(),
+  ])
+  const syncAttempts = (checkpoint?.syncAttempts ?? 0) + 1
+  const delayMs = syncRetryDelay(error, syncAttempts)
+  if (delayMs === null) return false
+
+  const nextAttemptAt = Date.now() + delayMs
+  await indexedDbStore.setMeta(META_KEYS.backfill, {
+    ...(checkpoint ?? initialCheckpoint(`newer_than:${settings.backfillDays}d`)),
+    nextAttemptAt,
+    syncAttempts,
+  })
+  await scheduleSync(nextAttemptAt)
+  return true
+}
+
+async function clearSyncRetryAttempts(): Promise<void> {
+  const checkpoint = await indexedDbStore.getMeta<BackfillCheckpoint>(META_KEYS.backfill)
+  if (!checkpoint?.syncAttempts) return
+  await indexedDbStore.setMeta(META_KEYS.backfill, { ...checkpoint, syncAttempts: 0 })
+}
+
+async function runAutomaticSync(): Promise<void> {
+  if ((await readAuthState()) !== 'connected') return
+  if (await indexedDbStore.getMeta<string | null>(META_KEYS.syncBlocked)) return
+  const checkpoint = await indexedDbStore.getMeta<BackfillCheckpoint>(META_KEYS.backfill)
+  if (checkpoint?.nextAttemptAt && checkpoint.nextAttemptAt > Date.now()) {
+    await scheduleSync(checkpoint.nextAttemptAt)
+    return
+  }
+
+  try {
+    const result = await runWithSyncWatchdog(
+      () => scheduleSync(),
+      () => syncOnce(),
+    )
+    await clearSyncRetryAttempts()
+    await indexedDbStore.setMeta(META_KEYS.lastSync, Date.now())
+    if (result.remaining) await scheduleSync(result.nextAttemptAt)
+    else await chrome.alarms.clear(RESUME_SYNC_ALARM)
+  } catch (error) {
+    const authState = authStateForError(error)
+    if (authState) {
+      await writeAuthState(authState)
+      return
+    }
+
+    if (await persistSyncRetry(error)) return
+
+    const message = error instanceof Error ? error.message : String(error)
+    await indexedDbStore.setMeta(META_KEYS.syncBlocked, message)
+  }
+}
+
+async function syncStatus(): Promise<SyncStatus> {
+  const [checkpoint, settings, blocked] = await Promise.all([
+    indexedDbStore.getMeta<BackfillCheckpoint>(META_KEYS.backfill),
+    readSettings(),
+    indexedDbStore.getMeta<string | null>(META_KEYS.syncBlocked),
+  ])
+  const totalProcessed = checkpoint?.processedCount ?? 0
+
+  if (blocked) return { state: 'blocked', totalProcessed, message: blocked }
+  if (inFlightSync) return { state: 'loading', totalProcessed }
+
+  const needsLlmPass = isConfigured(settings) && checkpoint?.llmProcessed !== true
+  const hasWork = !checkpoint || checkpoint.status !== 'complete' || needsLlmPass
+  if (!hasWork) return { state: 'ready', totalProcessed }
+
+  if (checkpoint?.nextAttemptAt && checkpoint.nextAttemptAt > Date.now()) {
+    return {
+      state: 'waiting',
+      totalProcessed,
+      nextAttemptAt: checkpoint.nextAttemptAt,
+    }
+  }
+  return { state: 'loading', totalProcessed }
+}
+
+function settingsView(settings: Settings): SettingsView {
   return {
     provider: settings.provider,
     model: settings.model,
-    backfillDays: settings.backfillDays,
-    enableOcr: settings.enableOcr,
-    fetchRemoteImages: settings.fetchRemoteImages,
     hasApiKey: settings.apiKey.length > 0,
     apiKeyMasked: maskApiKey(settings.apiKey),
   }
 }
 
 async function updateSettings(patch: Partial<Settings>): Promise<Settings> {
-  const after = await writeSettings(patch)
+  const settings = await writeSettings(patch)
   settingsRevision += 1
-  return after
+  await indexedDbStore.setMeta(META_KEYS.syncBlocked, null)
+  if ((await readAuthState()) === 'connected') {
+    await scheduleSync()
+    void runAutomaticSync()
+  }
+  return settings
 }
 
 async function removeApiKey(): Promise<Settings> {
   const settings = await clearApiKey()
   settingsRevision += 1
+  await indexedDbStore.setMeta(META_KEYS.syncBlocked, null)
+  if ((await readAuthState()) === 'connected') {
+    await scheduleSync()
+    void runAutomaticSync()
+  }
   return settings
+}
+
+async function chatSnapshot(): Promise<{
+  chatTurns: ChatTurnRecord[]
+  offers: OfferRecord[]
+}> {
+  const [chatTurns, offers] = await Promise.all([
+    indexedDbStore.listChatTurns(),
+    indexedDbStore.listOffers(),
+  ])
+  return { chatTurns, offers }
+}
+
+async function sendChat(question: string): Promise<PopupResponse> {
+  if ((await readAuthState()) !== 'connected') throw new ReauthRequiredError()
+
+  const settings = await readSettings()
+  if (!isConfigured(settings)) {
+    throw new Error('Add an LLM API key from Settings to start chatting.')
+  }
+
+  const revision = settingsRevision
+  const [offers, history, checkpoint] = await Promise.all([
+    indexedDbStore.listOffers(),
+    indexedDbStore.listChatTurns(),
+    indexedDbStore.getMeta<BackfillCheckpoint>(META_KEYS.backfill),
+  ])
+  const answer = await answerCouponQuestion(
+    question,
+    offers,
+    history,
+    {
+      processed: checkpoint?.processedCount ?? 0,
+      complete: checkpoint?.status === 'complete' && checkpoint.llmProcessed === true,
+    },
+    {
+      adapter: adapterFor(settings.provider),
+      settings,
+      queue: llmQueue,
+      fetchImpl: (...args) => fetch(...args),
+      now: () => Date.now(),
+      shouldContinue: () => revision === settingsRevision,
+    },
+  )
+
+  const now = Date.now()
+  const additions: ChatTurnRecord[] = [
+    {
+      turnId: crypto.randomUUID(),
+      role: 'user',
+      text: question.trim().slice(0, 500),
+      offerKeys: [],
+      createdAt: now,
+    },
+    {
+      turnId: crypto.randomUUID(),
+      role: 'assistant',
+      text: answer.text,
+      offerKeys: answer.offerKeys,
+      createdAt: now + 1,
+    },
+  ]
+  const turns = [...history, ...additions].slice(-CHAT_HISTORY_LIMIT)
+  await indexedDbStore.replaceChatTurns(turns)
+
+  return {
+    ok: true,
+    authState: 'connected',
+    ...(await chatSnapshot()),
+  }
+}
+
+function queueChat(question: string): Promise<PopupResponse> {
+  const result = chatTail.then(() => sendChat(question))
+  chatTail = result.then(
+    () => undefined,
+    () => undefined,
+  )
+  return result
 }
 
 async function handle(request: PopupRequest): Promise<PopupResponse> {
   switch (request.type) {
-    case 'get-state':
-      return { ok: true, authState: await currentAuthState() }
-
+    case 'get-state': {
+      const authState = await currentAuthState()
+      if (authState === 'connected') {
+        await requestRefreshIfDue()
+        await scheduleSync()
+        void runAutomaticSync()
+      }
+      return { ok: true, authState }
+    }
     case 'connect':
       return await connect()
-
-    case 'list-messages': {
-      if ((await readAuthState()) === 'reauth_required') throw new ReauthRequiredError()
-      const settings = await readSettings()
-      const messages = await listPromotionSummaries(
-        deps,
-        POPUP_MESSAGE_LIMIT,
-        settings.backfillDays,
-      )
-      await writeAuthState('connected')
-      return { ok: true, authState: 'connected', messages }
-    }
-
-    case 'list-offers': {
-      return { ok: true, authState: await readAuthState(), offers: await indexedDbStore.listOffers() }
-    }
-
+    case 'get-sync-status':
+      return { ok: true, authState: await readAuthState(), syncStatus: await syncStatus() }
+    case 'get-chat':
+      return { ok: true, authState: await readAuthState(), ...(await chatSnapshot()) }
+    case 'send-chat':
+      return await queueChat(request.question)
     case 'get-settings':
-      return { ok: true, authState: await readAuthState(), settings: viewOf(await readSettings()) }
-
+      return {
+        ok: true,
+        authState: await readAuthState(),
+        settings: settingsView(await readSettings()),
+      }
     case 'save-settings':
       return {
         ok: true,
         authState: await readAuthState(),
-        settings: viewOf(await updateSettings(request.settings)),
+        settings: settingsView(await updateSettings(request.settings)),
       }
-
     case 'clear-api-key':
-      return { ok: true, authState: await readAuthState(), settings: viewOf(await removeApiKey()) }
-
-    case 'sync': {
-      if ((await readAuthState()) === 'reauth_required') throw new ReauthRequiredError()
-      return { ok: true, authState: 'connected', progress: await syncOnce() }
-    }
+      return {
+        ok: true,
+        authState: await readAuthState(),
+        settings: settingsView(await removeApiKey()),
+      }
   }
 }
 
-// Registered synchronously at module scope so the worker can be woken by it.
 chrome.runtime.onMessage.addListener((request: PopupRequest, _sender, sendResponse) => {
   handle(request)
     .then(sendResponse)
@@ -206,3 +389,32 @@ chrome.runtime.onMessage.addListener((request: PopupRequest, _sender, sendRespon
     })
   return true
 })
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === PERIODIC_SYNC_ALARM || alarm.name === RESUME_SYNC_ALARM) {
+    void (async () => {
+      if (alarm.name === PERIODIC_SYNC_ALARM) await requestRefreshIfDue(true)
+      await runAutomaticSync()
+    })().catch(() => undefined)
+  }
+})
+
+chrome.runtime.onInstalled.addListener(() => {
+  void ensurePeriodicSync()
+    .then(async () => {
+      await scheduleSync()
+      await runAutomaticSync()
+    })
+    .catch(() => undefined)
+})
+
+chrome.runtime.onStartup.addListener(() => {
+  void ensurePeriodicSync()
+    .then(async () => {
+      await scheduleSync()
+      await runAutomaticSync()
+    })
+    .catch(() => undefined)
+})
+
+void ensurePeriodicSync().catch(() => undefined)

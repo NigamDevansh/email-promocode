@@ -1,6 +1,6 @@
 import type { Candidate } from '../types/extraction.js'
 import type { ParsedMessage } from '../types/gmail.js'
-import { LlmError, type JsonSchema } from '../types/llm.js'
+import { LlmError, type ExtractedOffer, type JsonSchema } from '../types/llm.js'
 import { normalizeCode } from '../utils/candidates.js'
 import { extractVisibleText } from '../utils/html.js'
 
@@ -120,20 +120,6 @@ export function buildExtractionPrompt(message: ParsedMessage, candidates: Candid
   ].join('\n')
 }
 
-export interface ExtractedOffer {
-  code: string
-  normalizedCode: string
-  discount: string | null
-  currency: string | null
-  minSpend: number | null
-  maxDiscount: number | null
-  expiry: string | null
-  singleUse: boolean | null
-  newUsersOnly: boolean
-  appOnly: boolean
-  categories: string[]
-  conditions: string
-}
 
 function asString(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null

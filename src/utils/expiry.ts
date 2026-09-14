@@ -52,10 +52,6 @@ export function describeExpiry(state: ExpiryState): string {
   }
 }
 
-export function isExpired(offer: OfferRecord, today: Date): boolean {
-  return expiryStateOf(offer.expiry, today).kind === 'expired'
-}
-
 const CURRENCY_SYMBOLS: Readonly<Record<string, string>> = {
   INR: '₹',
   USD: '$',

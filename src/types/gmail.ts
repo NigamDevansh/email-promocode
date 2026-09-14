@@ -29,21 +29,9 @@ export interface GmailMessage {
   payload?: GmailPart
 }
 
-export interface GmailMessageRef {
-  id: string
-  threadId: string
-}
-
 export interface GmailListResponse {
-  messages?: GmailMessageRef[]
+  messages?: { id: string; threadId?: string }[]
   nextPageToken?: string
-}
-
-export interface GmailMetadataResponse {
-  id: string
-  threadId: string
-  internalDate?: string
-  payload?: { headers?: GmailHeader[] }
 }
 
 export interface GmailAttachmentResponse {

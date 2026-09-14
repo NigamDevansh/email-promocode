@@ -1,3 +1,4 @@
+import type { ChatTurnRecord } from '../../src/types/chat.ts'
 import type { OfferRecord, ProcessedRecord, Store } from '../../src/types/storage.ts'
 import { mergeOffer, offerKey } from '../../src/utils/offers.ts'
 
@@ -5,6 +6,7 @@ export interface MemoryStore extends Store {
   processed: Map<string, ProcessedRecord>
   offers: Map<string, OfferRecord>
   meta: Map<string, unknown>
+  chat: Map<string, ChatTurnRecord>
   /** Number of commitMessage transactions, to assert atomic write counts. */
   commits: number
 }
@@ -14,11 +16,13 @@ export function createMemoryStore(): MemoryStore {
   const processed = new Map<string, ProcessedRecord>()
   const offers = new Map<string, OfferRecord>()
   const meta = new Map<string, unknown>()
+  const chat = new Map<string, ChatTurnRecord>()
 
   const store: MemoryStore = {
     processed,
     offers,
     meta,
+    chat,
     commits: 0,
 
     async getProcessed(messageId) {
@@ -48,6 +52,15 @@ export function createMemoryStore(): MemoryStore {
           offers.delete(key)
         }
       }
+    },
+
+    async listChatTurns() {
+      return [...chat.values()].sort((left, right) => left.createdAt - right.createdAt)
+    },
+
+    async replaceChatTurns(turns) {
+      chat.clear()
+      for (const turn of turns) chat.set(turn.turnId, structuredClone(turn))
     },
 
     async getMeta(key) {

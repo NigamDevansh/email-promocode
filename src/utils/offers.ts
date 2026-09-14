@@ -1,15 +1,13 @@
-import type { ExtractedOffer } from '../llm/extraction.js'
 import type { Candidate, CandidateSource } from '../types/extraction.js'
 import type { ParsedMessage } from '../types/gmail.js'
+import type { ExtractedOffer } from '../types/llm.js'
 import type { OfferRecord } from '../types/storage.js'
 import { brandKeyFor, displayBrand } from './brand.js'
-import { expiryStateOf } from './expiry.js'
 import { EXTRACTOR_VERSION } from './storage.js'
 
 // Without an LLM, only direct link/alt evidence is strong enough to show.
 const PROMOTABLE: ReadonlySet<CandidateSource> = new Set(['link', 'alt'])
 
-/** String form of the IndexedDB compound key, used by the test store. */
 export function offerKey(offer: Pick<OfferRecord, 'brandKey' | 'normalizedCode'>): string {
   return JSON.stringify([offer.brandKey, offer.normalizedCode])
 }
@@ -55,7 +53,6 @@ export function buildOffers(message: ParsedMessage, candidates: Candidate[]): Of
   return offers
 }
 
-/** Combines duplicate brand/code records while keeping their source history. */
 export function mergeOffer(existing: OfferRecord | undefined, incoming: OfferRecord): OfferRecord {
   if (
     !existing ||
@@ -87,36 +84,7 @@ export function mergeOffer(existing: OfferRecord | undefined, incoming: OfferRec
   }
 }
 
-/** Active deadlines first, unknown deadlines next, expired offers last. */
-export function sortOffersForDisplay(offers: readonly OfferRecord[], today: Date): OfferRecord[] {
-  return [...offers].sort((a, b) => {
-    const left = expiryStateOf(a.expiry, today)
-    const right = expiryStateOf(b.expiry, today)
-
-    if ((left.kind === 'expired') !== (right.kind === 'expired')) {
-      return left.kind === 'expired' ? 1 : -1
-    }
-    if (left.kind === 'active' && right.kind === 'active' && left.daysLeft !== right.daysLeft) {
-      return left.daysLeft - right.daysLeft
-    }
-    if ((left.kind === 'active') !== (right.kind === 'active')) {
-      return left.kind === 'active' ? -1 : 1
-    }
-    return b.sourceMessageDate - a.sourceMessageDate
-  })
-}
-
-export function searchOffers(offers: readonly OfferRecord[], query: string): OfferRecord[] {
-  const needle = query.trim().toLowerCase()
-  if (!needle) return [...offers]
-
-  return offers.filter((offer) =>
-    [offer.brand, offer.brandKey, offer.normalizedCode, offer.sourceSubject].some((field) =>
-      field.toLowerCase().includes(needle),
-    ),
-  )
-}
-
+/** Deep link that opens the newest supporting message in Gmail. */
 export function gmailThreadUrl(offer: Pick<OfferRecord, 'sourceThreadId'>): string {
   return `https://mail.google.com/mail/u/0/#all/${offer.sourceThreadId}`
 }

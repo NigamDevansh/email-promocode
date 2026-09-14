@@ -1,11 +1,6 @@
-import { getDomain, getDomainWithoutSuffix } from 'tldts'
+import { getDomainWithoutSuffix } from 'tldts'
 
 const DOMAIN_OPTIONS = { allowPrivateDomains: true } as const
-
-/** Registrable domain according to the current Public Suffix List. */
-export function registrableDomain(domain: string): string {
-  return getDomain(domain, DOMAIN_OPTIONS) ?? ''
-}
 
 /** Stable identity derived from the sender domain, never from an LLM name. */
 export function brandKeyFor(senderDomain: string, sender: string): string {

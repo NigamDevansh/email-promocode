@@ -1,20 +1,12 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { brandKeyFor, displayBrand, registrableDomain } from '../src/utils/brand.ts'
+import { brandKeyFor, displayBrand } from '../src/utils/brand.ts'
 
 test('multi-label suffixes do not collapse unrelated brands', () => {
   // Both appear in a real Indian Promotions inbox. Taking the last two labels
   // would key both as "co.in" and merge two banks into one brand.
   assert.equal(brandKeyFor('communications.sbi.co.in', 'sbi@communications.sbi.co.in'), 'sbi')
   assert.equal(brandKeyFor('custcomm.hsbc.co.in', 'x@custcomm.hsbc.co.in'), 'hsbc')
-})
-
-test('strips subdomains down to the registrable domain', () => {
-  assert.equal(registrableDomain('offers.mail.myntra.com'), 'myntra.com')
-  assert.equal(registrableDomain('deals.example.co.uk'), 'example.co.uk')
-  assert.equal(registrableDomain('groww.in'), 'groww.in')
-  assert.equal(registrableDomain('campaign1.nipponindia.email'), 'nipponindia.email')
-  assert.equal(registrableDomain('shop.example.blogspot.com'), 'example.blogspot.com')
 })
 
 test('derives the brand key from the registrable domain', () => {

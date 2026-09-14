@@ -1,5 +1,6 @@
 import type { Candidate } from './extraction.js'
 import type { TokenUsage } from './llm.js'
+import type { ChatTurnRecord } from './chat.js'
 
 export type ProcessedStatus = 'no-code' | 'candidates' | 'ignored' | 'failed'
 
@@ -66,6 +67,8 @@ export interface BackfillCheckpoint {
   /** True only after a configured LLM completed this whole scan window. */
   llmProcessed?: boolean
   nextAttemptAt: number | null
+  /** Consecutive page-level transient failures, persisted for exponential backoff. */
+  syncAttempts?: number
   /** Attempts per message ID, so one broken message cannot block the scan. */
   attempts: Record<string, number>
 }
@@ -80,6 +83,8 @@ export interface Store {
   commitMessage(record: ProcessedRecord, offers: OfferRecord[]): Promise<void>
   listOffers(): Promise<OfferRecord[]>
   deleteStaleOffers(extractorVersion: number, requireLlm: boolean): Promise<void>
+  listChatTurns(): Promise<ChatTurnRecord[]>
+  replaceChatTurns(turns: readonly ChatTurnRecord[]): Promise<void>
   getMeta<T>(key: string): Promise<T | undefined>
   setMeta<T>(key: string, value: T): Promise<void>
 }

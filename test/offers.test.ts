@@ -9,12 +9,7 @@ import {
   expiryStateOf,
   formatMoney,
 } from '../src/utils/expiry.ts'
-import {
-  buildOffers,
-  mergeOffer,
-  searchOffers,
-  sortOffersForDisplay,
-} from '../src/utils/offers.ts'
+import { buildOffers, mergeOffer } from '../src/utils/offers.ts'
 import { EXTRACTOR_VERSION } from '../src/utils/storage.ts'
 
 const TODAY = new Date(2026, 8, 14, 12)
@@ -184,23 +179,6 @@ test('an LLM result replaces the same-version free-path placeholder', () => {
   assert.deepEqual(mergeOffer(free, enriched), enriched)
 })
 
-test('expiry is evaluated at read time, with expired offers kept and sorted last', () => {
-  const sorted = sortOffersForDisplay(
-    [
-      offer({ normalizedCode: 'GONE', expiry: '2026-09-01' }),
-      offer({ normalizedCode: 'LATER', expiry: '2026-09-30' }),
-      offer({ normalizedCode: 'SOON', expiry: '2026-09-15' }),
-      offer({ normalizedCode: 'UNKNOWN', expiry: null }),
-    ],
-    TODAY,
-  )
-
-  assert.deepEqual(
-    sorted.map((o) => o.normalizedCode),
-    ['SOON', 'LATER', 'UNKNOWN', 'GONE'],
-  )
-})
-
 test('expiry states read against today, not against extraction time', () => {
   assert.deepEqual(expiryStateOf('2026-09-15', TODAY), { kind: 'active', daysLeft: 1 })
   assert.deepEqual(expiryStateOf('2026-09-14', TODAY), { kind: 'active', daysLeft: 0 })
@@ -233,24 +211,3 @@ test('blocking conditions are surfaced alongside a code', () => {
   assert.equal(describeConditions(offer()), null)
 })
 
-test('search matches brand, code and source subject', () => {
-  const offers = [
-    offer({
-      normalizedCode: 'SAVE20',
-      brand: 'Myntra',
-      brandKey: 'myntra',
-      sourceSubject: 'Weekend offer',
-    }),
-    offer({
-      normalizedCode: 'FLY50',
-      brand: 'Air India',
-      brandKey: 'airindia',
-      sourceSubject: 'Flights to USA',
-    }),
-  ]
-
-  assert.deepEqual(searchOffers(offers, 'myntra').map((o) => o.normalizedCode), ['SAVE20'])
-  assert.deepEqual(searchOffers(offers, 'fly').map((o) => o.normalizedCode), ['FLY50'])
-  assert.deepEqual(searchOffers(offers, 'usa').map((o) => o.normalizedCode), ['FLY50'])
-  assert.equal(searchOffers(offers, '  ').length, 2)
-})

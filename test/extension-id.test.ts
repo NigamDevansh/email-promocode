@@ -23,6 +23,7 @@ test('different keys derive different IDs', () => {
 test('the packaged extension can call Gmail and every supported LLM provider', () => {
   const manifest = JSON.parse(readFileSync('manifest.template.json', 'utf8')) as {
     host_permissions?: string[]
+    permissions?: string[]
   }
 
   assert.deepEqual(manifest.host_permissions, [
@@ -31,4 +32,5 @@ test('the packaged extension can call Gmail and every supported LLM provider', (
     'https://api.openai.com/*',
     'https://generativelanguage.googleapis.com/*',
   ])
+  assert.ok(manifest.permissions?.includes('alarms'), 'background sync needs the alarms permission')
 })

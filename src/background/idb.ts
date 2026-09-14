@@ -1,3 +1,4 @@
+import type { ChatTurnRecord } from '../types/chat.js'
 import type { OfferRecord, ProcessedRecord, Store } from '../types/storage.js'
 import { mergeOffer } from '../utils/offers.js'
 
@@ -122,6 +123,30 @@ export const indexedDbStore: Store = {
       }
       cursor.continue()
     }
+    await done
+  },
+
+  async listChatTurns() {
+    const db = await database()
+    const transaction = db.transaction(CHAT, 'readonly')
+    const turns = await promisify<ChatTurnRecord[]>(
+      transaction.objectStore(CHAT).getAll() as IDBRequest<ChatTurnRecord[]>,
+    )
+    return turns.sort((left, right) => left.createdAt - right.createdAt)
+  },
+
+  async replaceChatTurns(turns) {
+    const db = await database()
+    const transaction = db.transaction(CHAT, 'readwrite')
+    const done = new Promise<void>((resolve, reject) => {
+      transaction.oncomplete = () => resolve()
+      transaction.onerror = () => reject(transaction.error)
+      transaction.onabort = () => reject(transaction.error ?? new Error('chat update aborted'))
+    })
+
+    const chatStore = transaction.objectStore(CHAT)
+    chatStore.clear()
+    for (const turn of turns) chatStore.put(turn)
     await done
   },
 

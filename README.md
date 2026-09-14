@@ -7,16 +7,16 @@ client and, from phase 4 onward, your own LLM API key.
 
 Full design in [COUPON-EXTENSION-DESIGN.md](COUPON-EXTENSION-DESIGN.md).
 
-**Status: Phases 1–4 are implemented.** Automated type, unit and build checks
-pass. The final account-level checks still require your real Google client ID,
-Gmail test user and one configured LLM provider key.
+**Status: Phases 1–5 and automatic rolling sync are implemented.** Automated
+type, unit and build checks pass. The final account-level checks still require
+your real Google client ID, Gmail test user and one configured LLM provider key.
 
 The extension currently:
 
-- connects to Gmail with read-only OAuth and previews 25 recent Promotions
-  messages;
-- manually scans up to 45 days of Promotions mail using a persisted,
-  restart-safe checkpoint;
+- connects to Gmail with read-only OAuth and immediately starts a background
+  Promotions scan;
+- resumes bounded scan slices through Chrome alarms even when the popup closes,
+  and checks the rolling mail window again every five minutes;
 - decodes Gmail MIME content and extracts coupon candidates from links, image
   alt text, subjects and body text without a DOM or network parser;
 - displays strong link/alt-text results without an API key and uses Anthropic,
@@ -25,15 +25,16 @@ The extension currently:
 - stores processed-message records and deduplicated offers in local IndexedDB;
 - keeps provider settings and the user-supplied API key in local extension
   storage, while returning only a masked key to the settings page; and
-- shows saved offers while disconnected, with search, copy and source-email
-  links.
+- answers natural-language questions from the complete active-offer table,
+  rendering validated coupon cards from IndexedDB rather than model-written
+  code strings; and
+- preserves the latest 20 chat turns when the popup closes.
 
-The popup currently requests each bounded scan slice. Closing it may leave the
-current slice to finish, but it stops requesting further slices; reopen the
-popup and press **Scan Promotions** to resume from the saved checkpoint. A
-completed backfill does not yet discover later emails automatically. Scheduled
-five-minute/history sync, chat, OCR and the 30-day expired-offer cleanup belong
-to later phases and are not implemented.
+The popup has no scanning controls. It contains only Connect when Google access
+is absent, a compact background-progress strip, the coupon chat, and a Settings
+gear. The current five-minute refresh re-lists the configured rolling window
+and relies on the completion cache to skip old messages. Gmail history-based
+incremental sync, OCR and the 30-day expired-offer cleanup remain future work.
 
 ## Requirements
 

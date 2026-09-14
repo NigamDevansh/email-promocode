@@ -8,10 +8,8 @@ const modelEl = document.querySelector<HTMLInputElement>('#model')!
 const apiKeyEl = document.querySelector<HTMLInputElement>('#apiKey')!
 const keyStateEl = document.querySelector<HTMLParagraphElement>('#keyState')!
 const clearKeyEl = document.querySelector<HTMLButtonElement>('#clearKey')!
-const backfillDaysEl = document.querySelector<HTMLInputElement>('#backfillDays')!
-const enableOcrEl = document.querySelector<HTMLInputElement>('#enableOcr')!
-const fetchRemoteImagesEl = document.querySelector<HTMLInputElement>('#fetchRemoteImages')!
 const statusEl = document.querySelector<HTMLSpanElement>('#status')!
+const saveEl = document.querySelector<HTMLButtonElement>('#save')!
 
 function send(request: PopupRequest): Promise<PopupResponse> {
   return chrome.runtime.sendMessage(request) as Promise<PopupResponse>
@@ -29,9 +27,6 @@ providerEl.replaceChildren(
 function apply(view: SettingsView): void {
   providerEl.value = view.provider
   modelEl.value = view.model
-  backfillDaysEl.value = String(view.backfillDays)
-  enableOcrEl.checked = view.enableOcr
-  fetchRemoteImagesEl.checked = view.fetchRemoteImages
 
   // The raw key never reaches this page; only whether one exists.
   apiKeyEl.value = ''
@@ -49,39 +44,57 @@ providerEl.addEventListener('change', () => {
 form.addEventListener('submit', async (event) => {
   event.preventDefault()
   statusEl.textContent = 'Saving…'
+  saveEl.disabled = true
 
-  const response = await send({
-    type: 'save-settings',
-    settings: {
-      provider: providerEl.value as ProviderId,
-      model: modelEl.value.trim(),
-      apiKey: apiKeyEl.value,
-      backfillDays: Number(backfillDaysEl.value),
-      enableOcr: enableOcrEl.checked,
-      fetchRemoteImages: fetchRemoteImagesEl.checked,
-    },
-  })
+  try {
+    const response = await send({
+      type: 'save-settings',
+      settings: {
+        provider: providerEl.value as ProviderId,
+        model: modelEl.value.trim(),
+        apiKey: apiKeyEl.value,
+      },
+    })
 
-  if (!response.ok || !response.settings) {
-    statusEl.textContent = response.ok ? 'Could not save.' : response.error
-    return
+    if (!response.ok || !response.settings) {
+      statusEl.textContent = response.ok ? 'Could not save. Please try again.' : response.error
+      return
+    }
+
+    apply(response.settings)
+    statusEl.textContent = 'Saved.'
+  } catch {
+    statusEl.textContent = 'Could not save. Please try again.'
+  } finally {
+    saveEl.disabled = false
   }
-
-  apply(response.settings)
-  statusEl.textContent = 'Saved.'
 })
 
 clearKeyEl.addEventListener('click', async () => {
-  const response = await send({ type: 'clear-api-key' })
-  if (response.ok && response.settings) {
-    apply(response.settings)
-    statusEl.textContent = 'Key removed.'
+  clearKeyEl.disabled = true
+  statusEl.textContent = 'Removing key…'
+  try {
+    const response = await send({ type: 'clear-api-key' })
+    if (response.ok && response.settings) {
+      apply(response.settings)
+      statusEl.textContent = 'Key removed.'
+      return
+    }
+    statusEl.textContent = response.ok ? 'Could not remove the key.' : response.error
+  } catch {
+    statusEl.textContent = 'Could not remove the key. Please try again.'
+  } finally {
+    clearKeyEl.disabled = false
   }
 })
 
 async function start(): Promise<void> {
-  const response = await send({ type: 'get-settings' })
-  if (response.ok && response.settings) apply(response.settings)
+  try {
+    const response = await send({ type: 'get-settings' })
+    if (response.ok && response.settings) apply(response.settings)
+  } catch {
+    statusEl.textContent = 'Could not load Settings. Reload this page to try again.'
+  }
 }
 
 void start()

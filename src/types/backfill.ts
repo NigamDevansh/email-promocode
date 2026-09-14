@@ -1,4 +1,4 @@
-import type { ExtractionDeps } from '../llm/extract-message.js'
+import type { ExtractionDeps } from './llm.js'
 import type { GmailPort } from './gmail.js'
 import type { OfferRecord, ProcessedRecord, Store } from './storage.js'
 

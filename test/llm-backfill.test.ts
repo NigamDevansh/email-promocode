@@ -1,11 +1,15 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { runBackfillSlice } from '../src/background/backfill.ts'
-import type { ExtractionDeps } from '../src/llm/extract-message.ts'
 import { RequestQueue } from '../src/llm/queue.ts'
 import type { BackfillDeps } from '../src/types/backfill.ts'
 import type { GmailMessage } from '../src/types/gmail.ts'
-import { LlmError, type CompletionResult, type ProviderAdapter } from '../src/types/llm.ts'
+import {
+  LlmError,
+  type CompletionResult,
+  type ExtractionDeps,
+  type ProviderAdapter,
+} from '../src/types/llm.ts'
 import { DEFAULT_SETTINGS } from '../src/utils/settings.ts'
 import { META_KEYS } from '../src/utils/storage.ts'
 import { b64url, createFakeGmail } from './helpers/fake-gmail.ts'

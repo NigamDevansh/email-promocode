@@ -1,10 +1,4 @@
-import { LlmError } from '../types/llm.js'
-
-/**
- * §6: interactive chat shares the limiter with backfill but jumps ahead of it,
- * so a long first scan never makes a chat turn wait behind every email.
- */
-export type Priority = 'interactive' | 'background'
+import { LlmError, type Priority, type QueueOptions, type TaskQueue } from '../types/llm.js'
 
 interface Waiting<T = unknown> {
   priority: Priority
@@ -13,18 +7,11 @@ interface Waiting<T = unknown> {
   reject: (error: unknown) => void
 }
 
-export interface QueueOptions {
-  /** Minimum gap between requests. Throughput is not an MVP goal. */
-  minSpacingMs: number
-  now: () => number
-  sleep: (ms: number) => Promise<void>
-}
-
 /**
  * One serialised provider queue: concurrency 1, conservative spacing, and a
  * shared pause that a 429 can set for everything behind it.
  */
-export class RequestQueue {
+export class RequestQueue implements TaskQueue {
   private readonly waiting: Waiting[] = []
   private running = false
   private nextAllowedAt = 0

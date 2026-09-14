@@ -83,3 +83,52 @@ export class LlmError extends Error {
     return this.kind === 'rate-limit' || this.kind === 'server' || this.kind === 'network'
   }
 }
+
+/** §6: interactive chat shares the limiter with backfill but jumps ahead of it. */
+export type Priority = 'interactive' | 'background'
+
+export interface QueueOptions {
+  /** Minimum gap between requests. Throughput is not an MVP goal. */
+  minSpacingMs: number
+  now: () => number
+  sleep: (ms: number) => Promise<void>
+}
+
+/**
+ * The queue surface consumers depend on. Declared here so types/ never has to
+ * import a concrete class out of llm/.
+ */
+export interface TaskQueue {
+  run<T>(priority: Priority, task: () => Promise<T>): Promise<T>
+  pauseUntil(timestamp: number): void
+  readonly pausedUntil: number
+}
+
+/** One coupon as the model reported it, after local validation. */
+export interface ExtractedOffer {
+  code: string
+  normalizedCode: string
+  discount: string | null
+  currency: string | null
+  minSpend: number | null
+  maxDiscount: number | null
+  expiry: string | null
+  singleUse: boolean | null
+  newUsersOnly: boolean
+  appOnly: boolean
+  categories: string[]
+  conditions: string
+}
+
+export interface ExtractionRun {
+  offers: ExtractedOffer[]
+  usage: TokenUsage
+}
+
+export interface ExtractionDeps {
+  adapter: ProviderAdapter
+  settings: Settings
+  queue: TaskQueue
+  fetchImpl: typeof fetch
+  priority?: Priority
+}
