@@ -1,27 +1,38 @@
-/*
- * The palette is Gmail's, so the popup reads as part of the mailbox it is
- * summarising rather than as a separate product: Google Blue for anything
- * actionable, Gmail's greys for everything else, and the brand red kept for
- * the mail mark alone.
- */
 :root {
   color-scheme: light;
-  font-family: Roboto, "Google Sans", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
-    "Segoe UI", Arial, sans-serif;
-  color: #202124;
+  font-family: "Google Sans", Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+  color: #1f1f1f;
   background: #ffffff;
+
   --blue: #1a73e8;
-  --blue-strong: #1765cc;
+  --blue-hover: #1765cc;
   --blue-deep: #174ea6;
   --blue-soft: #e8f0fe;
-  --blue-line: #d2e3fc;
-  --red: #ea4335;
+  --blue-container: #d3e3fd;
+  --blue-line: #c2e7ff;
+
   --red-soft: #fce8e6;
+
   --surface: #f6f8fc;
   --hover: #f1f3f4;
+  --hover-pill: #e8eaed;
   --border: #dadce0;
+  --border-subtle: #e0e2ec;
+  --text-primary: #1f1f1f;
+  --text-secondary: #444746;
   --muted: #5f6368;
   --danger: #d93025;
+
+  --status-urgent-bg: #fce8e6;
+  --status-urgent-text: #c5221f;
+  --status-warn-bg: #fef7e0;
+  --status-warn-text: #b06000;
+  --status-neutral-bg: #f1f3f4;
+  --status-neutral-text: #444746;
+
+  --shadow-sm: 0 1px 2px rgba(60, 64, 67, 0.08), 0 1px 3px rgba(60, 64, 67, 0.04);
+  --shadow-md: 0 1px 3px rgba(60, 64, 67, 0.12), 0 4px 8px rgba(60, 64, 67, 0.08);
+  --shadow-float: 0 2px 6px rgba(60, 64, 67, 0.15), 0 8px 16px rgba(60, 64, 67, 0.08);
 }
 
 * {
@@ -34,13 +45,33 @@ body {
   height: 580px;
   margin: 0;
   overflow: hidden;
-  background: #ffffff;
+  background: var(--surface);
+  color: var(--text-primary);
 }
 
 body {
   display: flex;
   flex-direction: column;
-  -webkit-tap-highlight-color: rgba(26, 115, 232, 0.14);
+  -webkit-tap-highlight-color: rgba(26, 115, 232, 0.12);
+  -webkit-font-smoothing: antialiased;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.25);
 }
 
 button,
@@ -56,15 +87,10 @@ textarea {
 
 button:focus-visible,
 a:focus-visible {
-  outline: 3px solid rgba(26, 115, 232, 0.35);
+  outline: 2px solid var(--blue);
   outline-offset: 2px;
 }
 
-/*
- * The composer is the focus indicator for the textarea inside it: an outline on
- * the textarea as well draws a second, rectangular ring inside the rounded
- * pill the moment you click into it.
- */
 textarea:focus,
 textarea:focus-visible {
   outline: none;
@@ -72,25 +98,26 @@ textarea:focus-visible {
 
 .skip-link {
   position: fixed;
-  z-index: 20;
+  z-index: 50;
   top: 8px;
   left: 8px;
-  padding: 8px 10px;
+  padding: 8px 12px;
   border-radius: 8px;
   color: #ffffff;
   background: var(--blue-deep);
+  text-decoration: none;
+  font-weight: 500;
   transform: translateY(-150%);
+  transition: transform 120ms ease;
 }
 
 .skip-link:focus {
   transform: translateY(0);
 }
 
-/* ------------------------------------------------------------- loading state */
-
 .sync-strip {
   position: fixed;
-  z-index: 10;
+  z-index: 20;
   inset: 0 0 auto;
   height: 3px;
   overflow: hidden;
@@ -100,7 +127,7 @@ textarea:focus-visible {
 
 .sync-strip span {
   display: block;
-  width: 42%;
+  width: 35%;
   height: 100%;
   border-radius: 999px;
   background: var(--blue);
@@ -109,12 +136,13 @@ textarea:focus-visible {
 
 .sync-strip.waiting span {
   width: 100%;
-  opacity: 0.55;
+  opacity: 0.6;
   animation: none;
+  background: #e37400;
 }
 
 .sync-strip.blocked {
-  background: #fce8e6;
+  background: var(--red-soft);
 }
 
 .sync-strip.blocked span {
@@ -125,14 +153,13 @@ textarea:focus-visible {
 
 @keyframes sync-slide {
   from {
-    transform: translateX(-110%);
+    transform: translateX(-100%);
   }
   to {
     transform: translateX(350%);
   }
 }
 
-/** The first paint, before the service worker has answered with any state. */
 .loading-view {
   display: grid;
   height: 100%;
@@ -140,7 +167,7 @@ textarea:focus-visible {
   align-content: center;
   gap: 16px;
   color: var(--muted);
-  font-size: 13px;
+  font-size: 13.5px;
 }
 
 .loading-view[hidden] {
@@ -148,20 +175,19 @@ textarea:focus-visible {
 }
 
 .spinner {
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
   border: 3px solid var(--blue-soft);
   border-top-color: var(--blue);
   border-radius: 50%;
   animation: spin 0.85s linear infinite;
 }
 
-/** The header's own marker, so "still updating" is visible and not just text. */
 .inline-spinner {
   display: inline-block;
-  width: 10px;
-  height: 10px;
-  margin-right: 5px;
+  width: 11px;
+  height: 11px;
+  margin-right: 6px;
   border: 2px solid var(--blue-line);
   border-top-color: var(--blue);
   border-radius: 50%;
@@ -175,8 +201,7 @@ textarea:focus-visible {
 
 .inline-spinner.waiting {
   border-color: var(--border);
-  border-top-color: var(--muted);
-  animation-duration: 2.4s;
+  border-top-color: #e37400;
 }
 
 .inline-spinner.blocked {
@@ -191,36 +216,46 @@ textarea:focus-visible {
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .sync-strip span {
-    width: 100%;
-    animation: none;
-  }
-
-  .spinner,
-  .inline-spinner {
-    animation-duration: 3s;
-  }
-
-  .conversation {
-    scroll-behavior: auto;
-  }
-}
-
-/* ------------------------------------------------------------------- header */
-
 .app-header {
   display: flex;
   flex: 0 0 auto;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  min-height: 76px;
-  padding: 17px 14px 13px 20px;
-  border-bottom: 1px solid var(--border);
+  min-height: 64px;
+  padding: 10px 14px 10px 16px;
+  background: #ffffff;
+  border-bottom: 1px solid var(--border-subtle);
+  box-shadow: 0 1px 2px rgba(60, 64, 67, 0.04);
+}
+
+.app-branding {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.gmail-mark {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  border-radius: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border-subtle);
 }
 
 .app-title {
+  display: flex;
+  flex-direction: column;
   min-width: 0;
+}
+
+.title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 h1,
@@ -230,29 +265,48 @@ p {
 }
 
 h1 {
-  font-size: 16px;
+  font-size: 15px;
+  font-weight: 600;
   line-height: 1.25;
+  color: var(--text-primary);
   letter-spacing: -0.01em;
-  text-wrap: balance;
+}
+
+.gmail-tab-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #1a73e8;
+  background: var(--blue-soft);
+  border: 1px solid var(--blue-line);
+  letter-spacing: 0.01em;
+}
+
+.tab-chip-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #1a73e8;
 }
 
 #headerStatus {
-  margin-top: 4px;
+  margin-top: 2px;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 11.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-/*
- * §12 disclosure. Reading a coupon that only exists as pixels means fetching
- * the sender's own images, and a sender can see that. The trade is worth
- * making — it is the only way to reach an image-only code — but it is not
- * worth hiding, so it sits one hover away from the coupons it produced.
- */
 .header-actions {
   display: flex;
   flex: 0 0 auto;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
 }
 
 .info {
@@ -262,23 +316,22 @@ h1 {
 
 .info-popover {
   position: absolute;
-  z-index: 30;
-  top: calc(100% + 6px);
-  right: -40px;
-  width: 268px;
-  padding: 10px 12px;
-  border-radius: 8px;
-  color: #e8eaed;
-  background: #3c4043;
+  z-index: 40;
+  top: calc(100% + 8px);
+  right: -8px;
+  width: 275px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  color: #ffffff;
+  background: #202124;
   font-size: 11.5px;
   line-height: 1.5;
   text-wrap: pretty;
   opacity: 0;
-  /* Not display:none, so the reveal can be animated and stays measurable. */
   visibility: hidden;
   transform: translateY(-4px);
   transition: opacity 120ms ease, transform 120ms ease, visibility 120ms;
-  box-shadow: 0 2px 6px rgba(60, 64, 67, 0.3), 0 8px 24px rgba(60, 64, 67, 0.15);
+  box-shadow: var(--shadow-float);
 }
 
 .info:hover .info-popover,
@@ -288,37 +341,27 @@ h1 {
   transform: translateY(0);
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .info-popover {
-    transition: none;
-  }
-}
-
-.icon-button,
-.send-button {
+.icon-button {
   display: inline-grid;
-  width: 38px;
-  height: 38px;
+  width: 36px;
+  height: 36px;
   padding: 0;
   place-items: center;
-  border: 1px solid transparent;
+  border: 0;
   border-radius: 50%;
-  color: #444746;
+  color: var(--text-secondary);
   background: transparent;
   cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
 }
 
 .icon-button:hover {
   background: var(--hover);
+  color: var(--text-primary);
 }
 
-.icon-emoji {
-  font-size: 17px;
-  line-height: 1;
-}
-
-.send-button svg {
-  fill: currentColor;
+.icon-button:active {
+  background: var(--hover-pill);
 }
 
 main {
@@ -326,15 +369,15 @@ main {
   flex: 1;
 }
 
-/* ------------------------------------------------------------- connect view */
-
 .connect-view {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   height: 100%;
-  padding: 54px 54px 70px;
-  place-items: center;
-  align-content: center;
+  padding: 36px 42px 48px;
+  align-items: center;
+  justify-content: center;
   text-align: center;
+  background: #ffffff;
 }
 
 .connect-view[hidden],
@@ -342,60 +385,87 @@ main {
   display: none;
 }
 
-.connect-mark {
-  display: grid;
-  width: 58px;
-  height: 58px;
-  margin-bottom: 20px;
-  place-items: center;
-  border-radius: 50%;
-  color: var(--red);
-  background: var(--red-soft);
+.connect-badge-wrap {
+  position: relative;
+  margin-bottom: 18px;
 }
 
-.connect-mark svg {
-  fill: currentColor;
+.connect-mark {
+  display: grid;
+  width: 64px;
+  height: 64px;
+  place-items: center;
+  border-radius: 18px;
+  background: var(--surface);
+  border: 1px solid var(--border-subtle);
+  box-shadow: var(--shadow-sm);
 }
 
 .connect-view h2 {
-  max-width: 330px;
-  font-size: 24px;
-  line-height: 1.2;
-  letter-spacing: -0.025em;
-  text-wrap: balance;
+  max-width: 340px;
+  font-size: 21px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
 }
 
-.connect-view > p:not(.inline-error) {
-  max-width: 350px;
-  margin-top: 11px;
+.connect-desc {
+  max-width: 340px;
+  margin: 8px 0 24px;
   color: var(--muted);
-  font-size: 14px;
-  line-height: 1.55;
-  text-wrap: pretty;
+  font-size: 13.5px;
+  line-height: 1.5;
 }
 
 .primary-button {
-  min-width: 180px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-width: 200px;
   min-height: 44px;
-  margin-top: 25px;
-  padding: 10px 18px;
+  padding: 10px 22px;
   border: 0;
   border-radius: 999px;
   color: #ffffff;
   background: var(--blue);
+  font-size: 14px;
   font-weight: 500;
   letter-spacing: 0.01em;
   cursor: pointer;
-  box-shadow: 0 1px 2px rgba(60, 64, 67, 0.3), 0 1px 3px 1px rgba(60, 64, 67, 0.15);
+  box-shadow: var(--shadow-sm);
+  transition: background 120ms ease, box-shadow 120ms ease;
 }
 
 .primary-button:hover {
-  background: var(--blue-strong);
-  box-shadow: 0 1px 3px rgba(60, 64, 67, 0.3), 0 4px 8px 3px rgba(60, 64, 67, 0.15);
+  background: var(--blue-hover);
+  box-shadow: var(--shadow-md);
 }
 
 .primary-button:active {
   background: var(--blue-deep);
+}
+
+.primary-button.google-btn {
+  background: #ffffff;
+  color: #1f1f1f;
+  border: 1px solid var(--border);
+  box-shadow: 0 1px 2px rgba(60, 64, 67, 0.1);
+}
+
+.primary-button.google-btn:hover {
+  background: var(--hover);
+  border-color: #c4c7c5;
+  box-shadow: 0 1px 3px rgba(60, 64, 67, 0.15);
+}
+
+.primary-button.google-btn:active {
+  background: var(--hover-pill);
+}
+
+.google-mark {
+  flex: 0 0 auto;
 }
 
 .primary-button:disabled,
@@ -405,25 +475,24 @@ main {
 }
 
 .inline-error {
-  min-height: 20px;
-  margin-top: 14px;
+  min-height: 18px;
+  margin-top: 12px;
   color: var(--danger);
   font-size: 12px;
 }
-
-/* ---------------------------------------------------------------- chat view */
 
 .chat-view {
   display: flex;
   height: 100%;
   min-height: 0;
   flex-direction: column;
+  background: var(--surface);
 }
 
 .conversation {
   display: flex;
   min-height: 0;
-  padding: 18px 20px 12px;
+  padding: 16px 18px 10px;
   overflow-y: auto;
   overscroll-behavior: contain;
   flex: 1;
@@ -433,12 +502,42 @@ main {
 }
 
 .empty-chat {
-  max-width: 330px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 400px;
   margin: auto;
-  color: var(--muted);
+  padding: 24px 16px;
   text-align: center;
-  line-height: 1.55;
-  text-wrap: pretty;
+  background: #ffffff;
+  border: 1px solid var(--border-subtle);
+  border-radius: 16px;
+  box-shadow: var(--shadow-sm);
+}
+
+.empty-chat-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin-bottom: 12px;
+  border-radius: 12px;
+  background: var(--blue-soft);
+  color: var(--blue);
+}
+
+.empty-chat-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.empty-chat-desc {
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.5;
+  margin-bottom: 16px;
 }
 
 .turn {
@@ -448,10 +547,6 @@ main {
   gap: 8px;
 }
 
-/*
- * Bubbles hug their text instead of stretching to the column: a two-word reply
- * in a bubble the width of the popup reads as a banner, not as an answer.
- */
 .turn-assistant {
   align-items: flex-start;
 }
@@ -461,12 +556,14 @@ main {
 }
 
 .bubble {
-  max-width: 84%;
-  padding: 10px 12px;
-  border-radius: 14px;
-  line-height: 1.48;
+  max-width: 86%;
+  padding: 10px 14px;
+  border-radius: 16px;
+  font-size: 13.5px;
+  line-height: 1.5;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
+  box-shadow: var(--shadow-sm);
 }
 
 .turn-user .bubble {
@@ -477,16 +574,17 @@ main {
 
 .turn-assistant .bubble {
   border-bottom-left-radius: 4px;
-  background: var(--hover);
+  background: #ffffff;
+  border: 1px solid var(--border-subtle);
+  color: var(--text-primary);
 }
 
-/** Three dots in an assistant bubble: the answer is being written right here. */
 .bubble-typing {
   display: flex;
   width: max-content;
   align-items: center;
-  gap: 4px;
-  padding: 14px 13px;
+  gap: 5px;
+  padding: 12px 14px;
 }
 
 .bubble-typing span {
@@ -518,19 +616,19 @@ main {
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .bubble-typing span {
-    animation: none;
-    opacity: 0.55;
-  }
+.offer-card {
+  width: min(420px, 94%);
+  padding: 12px 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: var(--shadow-sm);
+  transition: border-color 120ms ease, box-shadow 120ms ease;
 }
 
-.offer-card {
-  width: min(390px, 92%);
-  padding: 11px 12px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: #ffffff;
+.offer-card:hover {
+  border-color: var(--blue-line);
+  box-shadow: var(--shadow-md);
 }
 
 .offer-card-head {
@@ -541,80 +639,167 @@ main {
   gap: 10px;
 }
 
+.offer-brand-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.offer-avatar {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--blue-soft);
+  color: var(--blue-deep);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
 .offer-brand {
   min-width: 0;
   overflow: hidden;
-  font-size: 12px;
-  font-weight: 500;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .offer-code {
-  padding: 5px 8px;
-  border: 1px solid var(--blue-line);
-  border-radius: 7px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: 1.5px dashed var(--blue);
+  border-radius: 8px;
   color: var(--blue-deep);
   background: var(--blue-soft);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.03em;
   cursor: pointer;
+  transition: all 120ms ease;
 }
 
 .offer-code:hover {
-  border-color: var(--blue);
+  background: var(--blue-container);
+  border-color: var(--blue-deep);
+}
+
+.offer-code.copied {
+  border-style: solid;
+  border-color: #188038;
+  color: #0d652d;
+  background: #e6f4ea;
+}
+
+.offer-badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  margin-top: 8px;
+}
+
+.offer-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.offer-pill.discount {
+  background: var(--blue-soft);
+  color: var(--blue-deep);
+}
+
+.offer-pill.urgent {
+  background: var(--status-urgent-bg);
+  color: var(--status-urgent-text);
+}
+
+.offer-pill.warn {
+  background: var(--status-warn-bg);
+  color: var(--status-warn-text);
+}
+
+.offer-pill.neutral {
+  background: var(--status-neutral-bg);
+  color: var(--status-neutral-text);
 }
 
 .offer-detail {
-  margin-top: 7px;
-  color: var(--muted);
-  font-size: 11.5px;
+  margin-top: 8px;
+  color: var(--text-secondary);
+  font-size: 12px;
   line-height: 1.45;
   overflow-wrap: anywhere;
 }
 
+.offer-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--hover);
+}
+
 .offer-source {
-  display: inline-block;
-  margin-top: 7px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   color: var(--blue);
   font-size: 11.5px;
+  font-weight: 500;
   text-decoration: none;
+  transition: color 120ms ease;
 }
 
 .offer-source:hover {
+  color: var(--blue-deep);
   text-decoration: underline;
 }
 
 .composer {
   display: flex;
-  margin: 0 16px;
-  padding: 7px 7px 7px 12px;
+  margin: 0 14px 6px;
+  padding: 6px 6px 6px 14px;
   border: 1px solid var(--border);
-  border-radius: 24px;
+  border-radius: 28px;
   background: #ffffff;
-  box-shadow: 0 1px 3px rgba(60, 64, 67, 0.15);
-  align-items: flex-end;
+  box-shadow: 0 1px 4px rgba(60, 64, 67, 0.12);
+  align-items: center;
   gap: 8px;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
 }
 
 .composer:focus-within {
   border-color: var(--blue);
-  box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.24);
+  box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.22);
 }
 
 textarea {
-  min-height: 40px;
-  max-height: 104px;
-  padding: 9px 0 6px;
+  min-height: 24px;
+  max-height: 96px;
+  padding: 6px 0;
   overflow-y: auto;
   flex: 1;
   resize: none;
   border: 0;
-  color: #202124;
+  color: var(--text-primary);
   background: transparent;
-  line-height: 1.4;
+  line-height: 1.45;
+  font-size: 13.5px;
 }
 
 textarea::placeholder {
@@ -622,18 +807,42 @@ textarea::placeholder {
 }
 
 .send-button {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
   flex: 0 0 auto;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
   color: #ffffff;
   background: var(--blue);
+  cursor: pointer;
+  transition: background 120ms ease, transform 120ms ease;
 }
 
-.send-button:hover {
-  background: var(--blue-strong);
+.send-button:hover:not(:disabled) {
+  background: var(--blue-hover);
+}
+
+.send-button:active:not(:disabled) {
+  background: var(--blue-deep);
+}
+
+.send-button:disabled {
+  background: #f1f3f4;
+  color: #9aa0a6;
+  cursor: not-allowed;
+  opacity: 1;
+}
+
+.send-button svg {
+  fill: currentColor;
 }
 
 .chat-status {
-  min-height: 28px;
-  padding: 6px 20px 8px;
+  min-height: 22px;
+  padding: 2px 20px 6px;
   color: var(--muted);
   font-size: 11.5px;
 }
@@ -651,4 +860,28 @@ textarea::placeholder {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sync-strip span {
+    width: 100%;
+    animation: none;
+  }
+
+  .spinner,
+  .inline-spinner {
+    animation: none;
+  }
+
+  .conversation {
+    scroll-behavior: auto;
+  }
+
+  .info-popover,
+  .bubble-typing span,
+  .primary-button,
+  .offer-card {
+    transition: none;
+    animation: none;
+  }
 }

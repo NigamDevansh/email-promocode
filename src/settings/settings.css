@@ -1,153 +1,249 @@
-/* Same Gmail palette as the popup, so the two pages read as one product. */
 :root {
   color-scheme: light;
-  color: #202124;
-  background: #ffffff;
+  font-family: "Google Sans", Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+  color: #1f1f1f;
+  background: #f8fafd;
+
   --blue: #1a73e8;
-  --blue-strong: #1765cc;
+  --blue-hover: #1765cc;
   --blue-deep: #174ea6;
+  --blue-soft: #e8f0fe;
+  --blue-line: #c2e7ff;
+
+  --surface: #f6f8fc;
   --border: #dadce0;
+  --border-subtle: #e0e2ec;
   --hover: #f1f3f4;
   --muted: #5f6368;
+
+  --shadow-sm: 0 1px 2px rgba(60, 64, 67, 0.08), 0 1px 3px rgba(60, 64, 67, 0.04);
+  --shadow-md: 0 1px 3px rgba(60, 64, 67, 0.12), 0 4px 8px rgba(60, 64, 67, 0.08);
+}
+
+* {
+  box-sizing: border-box;
 }
 
 body {
   margin: 0;
-  padding: 28px 20px 60px;
-  font: 14px/1.55 Roboto, "Google Sans", system-ui, -apple-system, Arial, sans-serif;
-  color: #202124;
-  background: #ffffff;
+  padding: 36px 20px 80px;
+  background: var(--surface);
+  color: #1f1f1f;
+  -webkit-font-smoothing: antialiased;
 }
 
 main {
-  max-width: 620px;
+  max-width: 600px;
   margin: 0 auto;
 }
 
-h1 {
-  margin: 0 0 20px;
-  font-size: 19px;
-  font-weight: 500;
-}
-
-h2 {
-  margin: 0 0 6px;
-  font-size: 13px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.notice {
+.settings-header {
   margin-bottom: 24px;
-  padding: 14px 16px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
 }
 
-.notice p {
-  margin: 0 0 8px;
+.header-brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.gmail-mark {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: #ffffff;
+  border: 1px solid var(--border-subtle);
+  box-shadow: var(--shadow-sm);
+}
+
+h1 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  color: #1f1f1f;
+}
+
+.subtitle {
+  margin: 2px 0 0;
+  font-size: 13px;
   color: var(--muted);
 }
 
-.notice p:last-child {
+.notice {
+  display: flex;
+  gap: 14px;
+  margin-bottom: 24px;
+  padding: 16px 18px;
+  border: 1px solid var(--blue-line);
+  border-radius: 12px;
+  background: var(--blue-soft);
+  color: var(--blue-deep);
+}
+
+.notice-icon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  color: #1a73e8;
+}
+
+.notice-body h2 {
+  margin: 0 0 4px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--blue-deep);
+}
+
+.notice-body p {
+  margin: 0;
+  color: #3c4043;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.card {
+  margin: 0 0 24px;
+  padding: 24px 22px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow: var(--shadow-sm);
+}
+
+.card-header {
+  margin-bottom: 20px;
+}
+
+.card-header h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f1f1f;
+}
+
+.card-desc {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.field-group {
+  margin-bottom: 18px;
+}
+
+.field-group:last-child {
   margin-bottom: 0;
-}
-
-fieldset {
-  margin: 0 0 22px;
-  padding: 16px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-}
-
-legend {
-  padding: 0 6px;
-  font-weight: 500;
 }
 
 label {
   display: block;
-  margin: 14px 0 5px;
+  margin-bottom: 6px;
+  font-size: 13px;
   font-weight: 500;
-}
-
-label:first-of-type {
-  margin-top: 0;
+  color: #1f1f1f;
 }
 
 input[type='text'],
 input[type='password'],
 select {
-  box-sizing: border-box;
   width: 100%;
-  padding: 7px 9px;
+  padding: 10px 12px;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 8px;
   background: #ffffff;
-  color: inherit;
-  font: inherit;
+  color: #1f1f1f;
+  font-size: 13.5px;
+  line-height: 1.4;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
 }
 
-input[type='text']:focus,
-input[type='password']:focus,
+input[type='password'] {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.05em;
+}
+
+input:focus,
 select:focus {
   border-color: var(--blue);
+  box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.18);
   outline: none;
 }
 
-input:focus-visible,
-select:focus-visible,
-button:focus-visible {
-  outline: 3px solid rgba(26, 115, 232, 0.35);
-  outline-offset: 2px;
-}
-
 .hint {
-  margin: 5px 0 0;
+  margin: 6px 0 0;
   color: var(--muted);
-  font-size: 12.5px;
+  font-size: 12px;
+  line-height: 1.45;
 }
 
-button {
-  padding: 7px 16px;
+#keyState {
+  font-weight: 500;
+  color: #1f1f1f;
+}
+
+.secondary-btn {
+  margin-top: 12px;
+  padding: 6px 14px;
   border: 1px solid var(--border);
   border-radius: 999px;
   background: transparent;
-  color: var(--blue);
-  font: inherit;
+  color: var(--muted);
+  font-size: 12.5px;
   font-weight: 500;
   cursor: pointer;
+  transition: all 120ms ease;
 }
 
-button:hover {
+.secondary-btn:hover {
   background: var(--hover);
-}
-
-button[type='submit'] {
-  border-color: var(--blue);
-  color: #ffffff;
-  background: var(--blue);
-}
-
-button[type='submit']:hover {
-  background: var(--blue-strong);
-}
-
-button[type='submit']:active {
-  background: var(--blue-deep);
-}
-
-button.secondary {
-  margin-top: 12px;
-  font-size: 13px;
+  color: #1f1f1f;
+  border-color: #c4c7c5;
 }
 
 .actions {
   display: flex;
-  gap: 12px;
+  gap: 16px;
   align-items: center;
 }
 
+.save-btn {
+  min-width: 130px;
+  min-height: 40px;
+  padding: 9px 20px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--blue);
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: background 120ms ease, box-shadow 120ms ease;
+}
+
+.save-btn:hover {
+  background: var(--blue-hover);
+  box-shadow: var(--shadow-md);
+}
+
+.save-btn:active {
+  background: var(--blue-deep);
+}
+
+.save-btn:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
 #status {
+  font-size: 13px;
   color: var(--muted);
+  font-weight: 500;
 }

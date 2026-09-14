@@ -5,6 +5,7 @@ import type {
   OcrResult,
   RgbaImage,
 } from '../types/ocr.js'
+import { toTesseractLanguage } from '../utils/ocr-languages.js'
 import { meanConfidenceOf } from '../utils/ocr-text.js'
 import { preprocess } from '../utils/preprocess.js'
 
@@ -22,7 +23,7 @@ let workerPromise: Promise<Worker> | undefined
 
 /** One engine per document. Starting it costs seconds; keep it warm. */
 function engine(): Promise<Worker> {
-  workerPromise ??= createWorker('eng', 1, {
+  workerPromise ??= createWorker(toTesseractLanguage(__OCR_LANGUAGES__), 1, {
     workerPath: vendored('worker.min.js'),
     // Tesseract defaults to wrapping the worker in a blob: URL, which MV3
     // refuses under `script-src 'self'` — the worker simply never starts and

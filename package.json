@@ -15,8 +15,8 @@
     "check": "npm run typecheck && npm test",
     "extension-id": "node --import=tsx scripts/extension-id.ts",
     "vendor:ocr": "node --import=tsx scripts/vendor-ocr.ts",
-    "prebuild": "npm run vendor:ocr",
-    "predev": "npm run vendor:ocr"
+    "prebuild": "npm run vendor:ocr -- --mode production",
+    "predev": "npm run vendor:ocr -- --mode development"
   },
   "devDependencies": {
     "@types/chrome": "^0.2.9",

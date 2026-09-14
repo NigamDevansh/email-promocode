@@ -60,6 +60,22 @@ and before `npm run dev`) places the engine and language data in
 `public/vendor/tesseract/`; they are roughly 11MB and deliberately not
 committed.
 
+Set `OCR_LANGUAGES` in `.env` to bundle more Tesseract language packs, comma
+separated, using [tessdata_fast](https://github.com/tesseract-ocr/tessdata_fast)
+codes:
+
+```
+OCR_LANGUAGES=eng,hin,fra
+```
+
+English is always included, because a coupon code is ASCII whatever script
+surrounds it. Each extra pack adds roughly 1-5MB to the built extension: it is
+downloaded at build time, verified against `ocr-languages.lock.json`, and loaded
+by the OCR worker. Dropping a language from the list removes it from the next
+build. Packs come from a pinned tessdata_fast revision, and a language fetched
+for the first time has its digest recorded in the lockfile, which should be
+committed so every build of this repository gets identical language data.
+
 ### What OCR costs you
 
 Modern promotional email prints the code into a rendered banner more often than

@@ -1,58 +1,106 @@
 import { createHash } from 'node:crypto'
-import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-
-/*
- * §7: "Tesseract core and eng.traineddata must be bundled — MV3 blocks remotely
- * hosted code at runtime, not just by policy."
- *
- * The engine therefore has to be on disk inside the extension. It is copied
- * into public/ (which Vite already mirrors into dist/) rather than committed,
- * so the repository stays free of several megabytes of binaries while the built
- * extension still ships everything it needs.
- */
+import { loadEnv } from 'vite'
+import { parseOcrLanguages } from '../src/utils/ocr-languages.ts'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const target = resolve(root, 'public/vendor/tesseract')
+const lockPath = resolve(root, 'ocr-languages.lock.json')
 
-/**
- * LSTM-only SIMD build: the smallest core that still reads banner text well.
- *
- * `tesseract.js-core` is declared in package.json even though `tesseract.js`
- * already pulls it in: this script reads the files by path, and a transitive
- * dependency npm is free to nest is not a path worth depending on.
- */
+/** LSTM-only SIMD core, declared directly because this script needs a stable path. */
 const FROM_NODE_MODULES = [
   ['tesseract.js/dist/worker.min.js', 'worker.min.js'],
   ['tesseract.js-core/tesseract-core-simd-lstm.wasm', 'tesseract-core-simd-lstm.wasm'],
   ['tesseract.js-core/tesseract-core-simd-lstm.wasm.js', 'tesseract-core-simd-lstm.wasm.js'],
 ] as const
 
-/*
- * tessdata_fast: ~4MB instead of ~15MB, and accurate enough for banner text.
- *
- * Pinned to a commit rather than `main`, and checked against a known digest.
- * A moving branch would make the build unreproducible and would let the
- * language data change under the extension without anyone noticing — this is
- * a binary the OCR stage trusts completely. The npm copies above need no such
- * check: the lockfile already pins them by integrity hash.
- */
-const TRAINEDDATA_REVISION = '87416418657359cb625c412a48b6e1d6d41c29bd'
-const TRAINEDDATA_SHA256 = '7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2'
-const TRAINEDDATA_URL = `https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/${TRAINEDDATA_REVISION}/eng.traineddata`
+interface LanguageLock {
+  revision: string
+  languages: Record<string, string>
+}
+
+const lock = JSON.parse(readFileSync(lockPath, 'utf8')) as LanguageLock
 
 const sha256 = (bytes: Buffer): string => createHash('sha256').update(bytes).digest('hex')
 
-function verify(bytes: Buffer, source: string): void {
-  const digest = sha256(bytes)
-  if (digest === TRAINEDDATA_SHA256) return
+const urlFor = (language: string): string =>
+  `https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/${lock.revision}/${language}.traineddata`
 
-  throw new Error(
-    `eng.traineddata from ${source} does not match the pinned digest.\n` +
-      `  expected ${TRAINEDDATA_SHA256}\n` +
-      `  actual   ${digest}`,
-  )
+function modeFromArgs(): string {
+  const index = process.argv.indexOf('--mode')
+  if (index === -1) return 'production'
+
+  const mode = process.argv[index + 1]
+  if (!mode || mode.startsWith('-')) throw new Error('Expected a value after --mode.')
+  return mode
+}
+
+/** Uses Vite's parser so vendored packs exactly match the worker configuration. */
+function languagesFromEnv(): string[] {
+  return parseOcrLanguages(loadEnv(modeFromArgs(), root, '').OCR_LANGUAGES)
+}
+
+function verify(language: string, bytes: Buffer): 'verified' | 'recorded' {
+  const digest = sha256(bytes)
+  const known = lock.languages[language]
+
+  if (!known) {
+    lock.languages[language] = digest
+    writeFileSync(lockPath, `${JSON.stringify(lock, null, 2)}\n`)
+    return 'recorded'
+  }
+
+  if (digest !== known) {
+    throw new Error(
+      `${language}.traineddata does not match the pinned digest.\n` +
+        `  expected ${known}\n` +
+        `  actual   ${digest}\n` +
+        'Delete the cached file and retry, or update ocr-languages.lock.json deliberately.',
+    )
+  }
+
+  return 'verified'
+}
+
+async function vendorLanguage(language: string): Promise<number> {
+  const file = resolve(target, `${language}.traineddata`)
+
+  if (existsSync(file)) {
+    const state = verify(language, readFileSync(file))
+    const size = statSync(file).size
+    console.log(`kept    ${language}.traineddata (${(size / 1e6).toFixed(1)} MB, ${state})`)
+    return size
+  }
+
+  console.log(`fetching ${language}.traineddata @ ${lock.revision.slice(0, 7)}…`)
+  const response = await fetch(urlFor(language))
+  if (!response.ok) {
+    throw new Error(
+      `Could not download ${language}.traineddata: HTTP ${response.status}.\n` +
+        `Check that "${language}" exists in tessdata_fast at ${lock.revision.slice(0, 7)}.`,
+    )
+  }
+
+  const bytes = Buffer.from(await response.arrayBuffer())
+  const state = verify(language, bytes)
+  writeFileSync(file, bytes)
+  console.log(`fetched ${language}.traineddata (${(bytes.length / 1e6).toFixed(1)} MB, ${state})`)
+  if (state === 'recorded') {
+    console.log('        new digest written to ocr-languages.lock.json — commit it')
+  }
+
+  return bytes.length
 }
 
 async function main(): Promise<void> {
@@ -67,25 +115,21 @@ async function main(): Promise<void> {
     console.log(`copied  ${to} (${(statSync(source).size / 1e6).toFixed(1)} MB)`)
   }
 
-  const trainedData = resolve(target, 'eng.traineddata')
+  const languages = languagesFromEnv()
+  let languageBytes = 0
+  for (const language of languages) languageBytes += await vendorLanguage(language)
 
-  if (existsSync(trainedData)) {
-    // Re-verified rather than trusted: a cached file can be truncated or stale.
-    verify(readFileSync(trainedData), 'the local cache')
-    console.log(`kept    eng.traineddata (${(statSync(trainedData).size / 1e6).toFixed(1)} MB, verified)`)
-    return
+  for (const file of readdirSync(target)) {
+    if (!file.endsWith('.traineddata')) continue
+    if (languages.includes(file.replace('.traineddata', ''))) continue
+
+    rmSync(resolve(target, file))
+    console.log(`removed ${file} (no longer in OCR_LANGUAGES)`)
   }
 
-  console.log(`fetching eng.traineddata @ ${TRAINEDDATA_REVISION.slice(0, 7)}…`)
-  const response = await fetch(TRAINEDDATA_URL)
-  if (!response.ok) {
-    throw new Error(`Could not download eng.traineddata: HTTP ${response.status}`)
-  }
-
-  const bytes = Buffer.from(await response.arrayBuffer())
-  verify(bytes, TRAINEDDATA_URL)
-  writeFileSync(trainedData, bytes)
-  console.log(`fetched eng.traineddata (${(bytes.length / 1e6).toFixed(1)} MB, verified)`)
+  console.log(
+    `\nOCR languages: ${languages.join(', ')} (${(languageBytes / 1e6).toFixed(1)} MB of language data)`,
+  )
 }
 
 await main()

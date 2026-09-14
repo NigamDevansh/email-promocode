@@ -8,52 +8,86 @@
   </head>
   <body>
     <main>
-      <h1>Inbox Coupon Assistant</h1>
+      <header class="settings-header">
+        <div class="header-brand">
+          <div class="gmail-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="24" height="24">
+              <path fill="#4285F4" d="M1.5 5.5v13a2 2 0 0 0 2 2h3.5V9.75L1.5 5.5Z"/>
+              <path fill="#34A853" d="M17 20.5h3.5a2 2 0 0 0 2-2v-13l-5.5 4.25V20.5Z"/>
+              <path fill="#EA4335" d="M17 9.75V3.5h-2.5L12 5.5 9.5 3.5H7v6.25l5 3.75 5-3.75Z"/>
+              <path fill="#FBBC04" d="M1.5 5.5l5.5 4.25V3.5h-3.5a2 2 0 0 0-2 2Z"/>
+              <path fill="#C5221F" d="M17 3.5v6.25l5.5-4.25a2 2 0 0 0-2-2H17Z"/>
+            </svg>
+          </div>
+          <div>
+            <h1>Inbox Coupon Assistant</h1>
+            <p class="subtitle">Settings & AI Model Configuration</p>
+          </div>
+        </div>
+      </header>
 
       <section class="notice">
-        <h2>What leaves this machine</h2>
-        <p>
-          Relevant Promotions email text is sent directly to the provider you
-          choose, using your own API key. When you chat, active coupon details,
-          your question, and up to 10 recent chat turns are also sent to that
-          provider. The extension stores its API key, coupons, and chat history
-          only in this browser profile; it has no backend or telemetry.
-        </p>
+        <div class="notice-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+            <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/>
+          </svg>
+        </div>
+        <div class="notice-body">
+          <h2>What leaves this machine</h2>
+          <p>
+            Relevant Promotions email text is sent directly to the provider you
+            choose, using your own API key. When you chat, active coupon details,
+            your question, and up to 10 recent chat turns are also sent to that
+            provider. The extension stores its API key, coupons, and chat history
+            only in this browser profile; it has no backend or telemetry.
+          </p>
+        </div>
       </section>
 
-      <form id="form">
-        <fieldset>
-          <legend>LLM provider</legend>
+      <form id="form" class="settings-form">
+        <div class="card">
+          <div class="card-header">
+            <h2>LLM Provider & Model</h2>
+            <p class="card-desc">Configure your preferred AI provider to extract and search coupons.</p>
+          </div>
 
-          <label for="provider">Provider</label>
-          <select id="provider" name="provider"></select>
+          <div class="field-group">
+            <label for="provider">Provider</label>
+            <div class="select-wrap">
+              <select id="provider" name="provider"></select>
+            </div>
+          </div>
 
-          <label for="model">Model</label>
-          <input id="model" name="model" type="text" spellcheck="false" autocomplete="off" />
-          <p class="hint">
-            Extraction is a simple structured-output task; the cheapest tier is
-            genuinely sufficient.
-          </p>
+          <div class="field-group">
+            <label for="model">Model</label>
+            <input id="model" name="model" type="text" spellcheck="false" autocomplete="off" />
+            <p class="hint">
+              Extraction is a simple structured-output task; the cheapest tier is
+              genuinely sufficient.
+            </p>
+          </div>
 
-          <label for="apiKey">API key</label>
-          <input
-            id="apiKey"
-            name="apiKey"
-            type="password"
-            spellcheck="false"
-            autocomplete="off"
-            placeholder="Paste a key to set or replace it…"
-          />
-          <p class="hint" id="keyState"></p>
-          <p class="hint">
-            Stored unencrypted in this browser profile. Use a key scoped to this
-            project alone and set a spend limit in the provider console.
-          </p>
-          <button type="button" id="clearKey" class="secondary">Remove Stored Key</button>
-        </fieldset>
+          <div class="field-group">
+            <label for="apiKey">API key</label>
+            <input
+              id="apiKey"
+              name="apiKey"
+              type="password"
+              spellcheck="false"
+              autocomplete="off"
+              placeholder="Paste a key to set or replace it…"
+            />
+            <p class="hint" id="keyState"></p>
+            <p class="hint">
+              Stored unencrypted in this browser profile. Use a key scoped to this
+              project alone and set a spend limit in the provider console.
+            </p>
+            <button type="button" id="clearKey" class="secondary-btn">Remove Stored Key</button>
+          </div>
+        </div>
 
         <div class="actions">
-          <button type="submit" id="save">Save Settings</button>
+          <button type="submit" id="save" class="save-btn">Save Settings</button>
           <span id="status" role="status"></span>
         </div>
       </form>

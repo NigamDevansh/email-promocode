@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { defineConfig, loadEnv, type Plugin } from 'vite'
+import { parseOcrLanguages } from './src/utils/ocr-languages.js'
 
 const rootDir = dirname(fileURLToPath(import.meta.url))
 const srcDir = resolve(rootDir, 'src')
@@ -38,7 +39,9 @@ function manifestPlugin(clientId: string): Plugin {
 
 export default defineConfig(({ mode }) => {
   const development = mode === 'development'
-  const clientId = loadEnv(mode, rootDir, '').GOOGLE_CLIENT_ID?.trim()
+  const env = loadEnv(mode, rootDir, '')
+  const clientId = env.GOOGLE_CLIENT_ID?.trim()
+  const ocrLanguages = parseOcrLanguages(env.OCR_LANGUAGES)
 
   if (!clientId) {
     throw new Error(
@@ -60,6 +63,9 @@ export default defineConfig(({ mode }) => {
     envDir: rootDir,
     publicDir: resolve(rootDir, 'public'),
     plugins: [manifestPlugin(clientId)],
+    define: {
+      __OCR_LANGUAGES__: JSON.stringify(ocrLanguages),
+    },
     build: {
       outDir: resolve(rootDir, 'dist'),
       emptyOutDir: true,

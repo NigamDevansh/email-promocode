@@ -23,18 +23,12 @@ let chatTurns: ChatTurnRecord[] = []
 let offers: OfferRecord[] = []
 let hasApiKey = false
 let syncTimer: number | undefined
-/** True between sending a question and the answer landing, for the dots. */
 let awaitingAnswer = false
 
 function send(request: PopupRequest): Promise<PopupResponse> {
   return chrome.runtime.sendMessage(request) as Promise<PopupResponse>
 }
 
-/**
- * The header's progress line. The spinner is the part people actually notice:
- * "still updating" as plain grey text reads as a caption rather than as work
- * in progress.
- */
 function setHeaderStatus(text: string, spinner: '' | 'loading' | 'waiting' | 'blocked' = ''): void {
   headerStatusTextEl.textContent = text
   headerSpinnerEl.hidden = spinner === ''
@@ -62,9 +56,19 @@ function offerCard(offer: OfferRecord): HTMLElement {
   const card = document.createElement('article')
   card.className = 'offer-card'
 
+  const brandWrap = document.createElement('div')
+  brandWrap.className = 'offer-brand-wrap'
+
+  const avatar = document.createElement('span')
+  avatar.className = 'offer-avatar'
+  avatar.textContent = (offer.brand[0] ?? '?').toUpperCase()
+  avatar.setAttribute('aria-hidden', 'true')
+
   const brand = document.createElement('span')
   brand.className = 'offer-brand'
   brand.textContent = offer.brand
+
+  brandWrap.append(avatar, brand)
 
   const code = document.createElement('button')
   code.type = 'button'
@@ -76,10 +80,12 @@ function offerCard(offer: OfferRecord): HTMLElement {
   code.addEventListener('click', () => {
     void navigator.clipboard.writeText(offer.code).then(
       () => {
-        code.textContent = 'Copied'
+        code.classList.add('copied')
+        code.textContent = 'Copied ✓'
         window.setTimeout(() => {
+          code.classList.remove('copied')
           code.textContent = offer.code
-        }, 900)
+        }, 1200)
       },
       () => {
         chatStatusEl.classList.add('error')
@@ -90,27 +96,58 @@ function offerCard(offer: OfferRecord): HTMLElement {
 
   const head = document.createElement('div')
   head.className = 'offer-card-head'
-  head.append(brand, code)
+  head.append(brandWrap, code)
 
+  const badges = document.createElement('div')
+  badges.className = 'offer-badges'
+
+  if (offer.discount) {
+    const discountPill = document.createElement('span')
+    discountPill.className = 'offer-pill discount'
+    discountPill.textContent = offer.discount
+    badges.append(discountPill)
+  }
+
+  const expiryState = expiryStateOf(offer.expiry, new Date())
+  const expiryDesc = describeExpiry(expiryState)
+  if (expiryDesc) {
+    const expiryPill = document.createElement('span')
+    const isUrgent =
+      expiryState.kind === 'expired' ||
+      (expiryState.kind === 'active' && expiryState.daysLeft <= 1)
+    expiryPill.className = `offer-pill ${isUrgent ? 'urgent' : 'neutral'}`
+    expiryPill.textContent = expiryDesc
+    badges.append(expiryPill)
+  }
+
+  if (offer.needsReview) {
+    const reviewPill = document.createElement('span')
+    reviewPill.className = 'offer-pill warn'
+    reviewPill.textContent = 'Verify in email'
+    badges.append(reviewPill)
+  }
+
+  const conditions = describeConditions(offer)
   const detail = document.createElement('p')
   detail.className = 'offer-detail'
-  detail.textContent = [
-    offer.discount,
-    describeExpiry(expiryStateOf(offer.expiry, new Date())),
-    describeConditions(offer),
-    offer.needsReview ? 'Verify in the email' : null,
-  ]
-    .filter(Boolean)
-    .join(' · ')
+  detail.textContent = conditions || (badges.children.length === 0 ? 'Promo code found in Promotions' : '')
+
+  const footer = document.createElement('div')
+  footer.className = 'offer-footer'
 
   const source = document.createElement('a')
   source.className = 'offer-source'
   source.href = gmailThreadUrl(offer)
   source.target = '_blank'
   source.rel = 'noreferrer'
-  source.textContent = 'Open source email'
+  source.innerHTML = `<svg viewBox="0 0 20 20" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M2.5 4A1.5 1.5 0 0 0 1 5.5v9A1.5 1.5 0 0 0 2.5 16h15a1.5 1.5 0 0 0 1.5-1.5v-9A1.5 1.5 0 0 0 17.5 4h-15ZM2 6.13l7.47 4.98a1 1 0 0 0 1.06 0L18 6.13V14.5a.5.5 0 0 1-.5.5h-15a.5.5 0 0 1-.5-.5V6.13Zm15.35-1.13L10 9.89 2.65 5H17.35Z"/></svg><span>Open source email</span>`
 
-  card.append(head, detail, source)
+  footer.append(source)
+
+  card.append(head)
+  if (badges.children.length > 0) card.append(badges)
+  if (detail.textContent) card.append(detail)
+  card.append(footer)
   return card
 }
 
@@ -118,11 +155,25 @@ function renderConversation(): void {
   const byKey = new Map(offers.map((offer) => [offerKey(offer), offer]))
 
   if (chatTurns.length === 0) {
-    const empty = document.createElement('p')
+    const empty = document.createElement('div')
     empty.className = 'empty-chat'
-    empty.textContent = hasApiKey
+
+    const icon = document.createElement('div')
+    icon.className = 'empty-chat-icon'
+    icon.innerHTML = `<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zM12 6c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3zm-4 8c0-1.33 2.67-2 4-2s4 .67 4 2v2H8v-2z"/></svg>`
+
+    const title = document.createElement('div')
+    title.className = 'empty-chat-title'
+    title.textContent = 'Ask about your Promotions coupons'
+
+    const desc = document.createElement('p')
+    desc.className = 'empty-chat-desc'
+    desc.textContent = hasApiKey
       ? 'Ask about a brand, minimum spend, expiry, or the best coupon for your cart.'
-      : 'Add your LLM API key from the gear above, then ask for any coupon.'
+      : 'Add your LLM API key from the gear icon above, then ask for any coupon.'
+
+    empty.append(icon, title, desc)
+
     conversationEl.replaceChildren(empty)
     return
   }
@@ -151,7 +202,6 @@ function renderConversation(): void {
   nodes.at(-1)?.scrollIntoView({ block: 'end' })
 }
 
-/** An assistant bubble with three dots, so the wait happens where the answer will. */
 function typingIndicator(): HTMLElement {
   const wrapper = document.createElement('article')
   wrapper.className = 'turn turn-assistant'
