@@ -17,6 +17,14 @@ export interface IncrementalJob {
   nextAttemptAt: number | null
 }
 
+/** A bounded page walk returned by Gmail history discovery. */
+export interface HistoryDiscovery {
+  messageIds: string[]
+  pageToken: string | null
+  historyId: string | null
+  pagesWalked: number
+}
+
 export interface IncrementalResult {
   /** Message IDs history.list reported this run. */
   discovered: number

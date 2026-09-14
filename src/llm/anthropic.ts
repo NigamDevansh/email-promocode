@@ -1,18 +1,9 @@
 import { LlmError, type ProviderAdapter } from '../types/llm.js'
+import type { AnthropicResponse } from '../types/provider-responses.js'
 import { asLlmError, errorForResponse } from './http.js'
 
 const ENDPOINT = 'https://api.anthropic.com/v1/messages'
 
-interface AnthropicResponse {
-  content?: { type: string; name?: string; input?: unknown; text?: string }[]
-  stop_reason?: string
-  usage?: { input_tokens?: number; output_tokens?: number }
-}
-
-/**
- * §3: structured output comes from a tool with an `input_schema`, forced with
- * `tool_choice`, rather than from prompting alone.
- */
 export const anthropicAdapter: ProviderAdapter = {
   id: 'anthropic',
 
@@ -25,7 +16,6 @@ export const anthropicAdapter: ProviderAdapter = {
           'content-type': 'application/json',
           'x-api-key': context.apiKey,
           'anthropic-version': '2023-06-01',
-          // Required for requests made from an extension context.
           'anthropic-dangerous-direct-browser-access': 'true',
         },
         body: JSON.stringify({
@@ -57,7 +47,6 @@ export const anthropicAdapter: ProviderAdapter = {
     )
 
     if (!toolUse || toolUse.input === undefined) {
-      // A refusal or a stop before the tool call arrives here, not as an error status.
       const text = payload.content?.find((block) => block.type === 'text')?.text ?? ''
       throw new LlmError(
         'refusal',

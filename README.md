@@ -38,6 +38,11 @@ gear. The current five-minute refresh re-lists the configured rolling window
 and the incremental loop below keeps it cheap. Each sync also removes offers
 whose known expiry is more than 30 days old.
 
+A five-minute wake asks Gmail what changed and nothing more. On an idle mailbox
+that is one `history.list` call returning no records, so no message is listed or
+refetched. The rolling window is only re-listed when there is no usable cursor:
+the first scan, or one whose cursor outlived Gmail's retention.
+
 Each sync walks Gmail's history from the cursor stored by the last full scan,
 processes anything new, and only then spends what is left of its budget on the
 older backfill, so today's coupons never queue behind historical mail. The

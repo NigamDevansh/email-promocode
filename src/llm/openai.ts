@@ -1,17 +1,9 @@
 import { LlmError, type ProviderAdapter } from '../types/llm.js'
+import type { OpenAiResponse } from '../types/provider-responses.js'
 import { asLlmError, errorForResponse, parseJsonPayload } from './http.js'
 
 const ENDPOINT = 'https://api.openai.com/v1/chat/completions'
 
-interface OpenAiResponse {
-  choices?: {
-    message?: { content?: string | null; refusal?: string | null }
-    finish_reason?: string
-  }[]
-  usage?: { prompt_tokens?: number; completion_tokens?: number }
-}
-
-/** §3: strict JSON schema response format, system prompt as the first message. */
 export const openaiAdapter: ProviderAdapter = {
   id: 'openai',
 
@@ -56,7 +48,6 @@ export const openaiAdapter: ProviderAdapter = {
       throw new LlmError('refusal', `openai refused: ${choice.message.refusal.slice(0, 200)}`)
     }
     if (choice?.finish_reason === 'length') {
-      // Truncated JSON would parse as malformed; name the real cause instead.
       throw new LlmError('schema', 'openai hit max_completion_tokens before finishing the JSON')
     }
 

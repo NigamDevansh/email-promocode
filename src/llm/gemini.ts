@@ -1,23 +1,9 @@
 import { LlmError, type ProviderAdapter } from '../types/llm.js'
+import type { GeminiResponse } from '../types/provider-responses.js'
 import { asLlmError, errorForResponse, parseJsonPayload } from './http.js'
 
 const BASE = 'https://generativelanguage.googleapis.com/v1beta/models'
 
-interface GeminiResponse {
-  candidates?: {
-    content?: { parts?: { text?: string }[] }
-    finishReason?: string
-  }[]
-  promptFeedback?: { blockReason?: string }
-  usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number }
-}
-
-/**
- * §3: the MVP deliberately uses the stateless `generateContent` API rather than
- * Interactions — chat state is stored locally and sent per turn, so server-side
- * interaction state buys nothing, and generateContent has a stable documented
- * structured-output contract.
- */
 export const geminiAdapter: ProviderAdapter = {
   id: 'gemini',
 
@@ -68,7 +54,6 @@ export const geminiAdapter: ProviderAdapter = {
       throw new LlmError('refusal', `gemini stopped: ${candidate.finishReason}`)
     }
 
-    // A reply can arrive split across several text parts.
     const text = (candidate?.content?.parts ?? [])
       .map((part) => part.text ?? '')
       .join('')

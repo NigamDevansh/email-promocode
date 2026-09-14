@@ -102,6 +102,14 @@ export interface TaskQueue {
   readonly pausedUntil: number
 }
 
+/** One queued provider request. Kept as a type contract, not queue state. */
+export interface QueueEntry<T = unknown> {
+  priority: Priority
+  task: () => Promise<T>
+  resolve: (value: T) => void
+  reject: (error: unknown) => void
+}
+
 /** One coupon as the model reported it, after local validation. */
 export interface ExtractedOffer {
   code: string

@@ -91,6 +91,15 @@ test('an image declared too small to hold a code is still excluded', () => {
   )
 })
 
+test('a Gmail image declared too small is skipped before its attachment is requested', () => {
+  const payload: GmailPart = {
+    mimeType: 'multipart/related',
+    parts: [{ mimeType: 'image/png', body: { attachmentId: 'dot', size: 900 } }],
+  }
+
+  assert.deepEqual(selectOcrImages('', payload), [])
+})
+
 test('the same banner referenced twice is fetched once', () => {
   const html = img('src="https://cdn.example/hero.png"').repeat(3)
   assert.equal(selectOcrImages(html, undefined).length, 1)

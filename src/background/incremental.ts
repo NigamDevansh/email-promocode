@@ -1,6 +1,6 @@
 import type { BackfillDeps } from '../types/backfill.js'
 import type { GmailPort } from '../types/gmail.js'
-import type { IncrementalJob, IncrementalResult } from '../types/incremental.js'
+import type { HistoryDiscovery, IncrementalJob, IncrementalResult } from '../types/incremental.js'
 import { LlmError } from '../types/llm.js'
 import type { OfferRecord, ProcessedRecord } from '../types/storage.js'
 import { EXTRACTOR_VERSION, META_KEYS } from '../utils/storage.js'
@@ -27,13 +27,6 @@ const emptyResult = (): IncrementalResult => ({
   fullSyncRequired: false,
 })
 
-interface Discovery {
-  messageIds: string[]
-  pageToken: string | null
-  historyId: string | null
-  pagesWalked: number
-}
-
 /**
  * Walks history pages from `pageToken` until Gmail runs out or `maxPages` does.
  *
@@ -46,7 +39,7 @@ async function discover(
   startHistoryId: string,
   pageToken: string | null,
   maxPages: number,
-): Promise<Discovery> {
+): Promise<HistoryDiscovery> {
   const found = new Set<string>()
   let token = pageToken
   let historyId: string | null = null
@@ -114,7 +107,7 @@ export async function runIncrementalSlice(deps: BackfillDeps): Promise<Increment
   if (persisted) {
     job = persisted
   } else {
-    let found: Discovery
+    let found: HistoryDiscovery
     try {
       found = await discover(gmail, committed, null, pagesLeft)
     } catch (error) {
@@ -243,7 +236,7 @@ export async function runIncrementalSlice(deps: BackfillDeps): Promise<Increment
       processed < budget
     if (!canContinue) break
 
-    let found: Discovery
+    let found: HistoryDiscovery
     try {
       found = await discover(gmail, committed, job.pageToken, pagesLeft)
     } catch (error) {

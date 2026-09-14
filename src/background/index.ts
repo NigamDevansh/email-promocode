@@ -17,7 +17,7 @@ import { RequestQueue } from '../llm/queue.js'
 import { isConfigured, maskApiKey } from '../utils/settings.js'
 import { expiryRetentionCutoff } from '../utils/expiry.js'
 import { initialCheckpoint, META_KEYS } from '../utils/storage.js'
-import { rollingRefreshIsDue, runWithSyncWatchdog } from '../utils/sync.js'
+import { runWithSyncWatchdog, shouldRelistWindow } from '../utils/sync.js'
 import { authStateForError, ReauthRequiredError } from './auth.js'
 import { runBackfillSlice } from './backfill.js'
 import { runIncrementalSlice } from './incremental.js'
@@ -67,12 +67,13 @@ async function scheduleSync(when: number = Date.now() + 30_000): Promise<void> {
 async function requestRefreshIfDue(force: boolean = false): Promise<void> {
   if (inFlightSync) return
 
-  const [checkpoint, lastSync, settings] = await Promise.all([
+  const [checkpoint, historyCursor, lastSync, settings] = await Promise.all([
     indexedDbStore.getMeta<BackfillCheckpoint>(META_KEYS.backfill),
+    indexedDbStore.getMeta<string>(META_KEYS.historyId),
     indexedDbStore.getMeta<number>(META_KEYS.lastSync),
     readSettings(),
   ])
-  if (!rollingRefreshIsDue(checkpoint, lastSync, Date.now(), force)) return
+  if (!shouldRelistWindow({ checkpoint, historyCursor, lastSync, now: Date.now(), force })) return
 
   await indexedDbStore.setMeta(
     META_KEYS.backfill,

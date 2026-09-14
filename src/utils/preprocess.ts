@@ -1,34 +1,12 @@
 import type { RgbaImage } from '../types/ocr.js'
 
-/*
- * §7: "Preprocessing is what makes Tesseract usable on banners... Without it
- * you get M0NS00N4O instead of MONSOON40."
- *
- * The pipeline order is the one that section specifies: flatten alpha onto
- * white, upscale, grayscale, Otsu threshold, then detect polarity so
- * light-on-dark text gets inverted. Everything here is plain array work so the
- * whole thing runs under node:test without a canvas.
- */
-
-/** §7: 2-3x. Tesseract reads glyphs far better with more pixels per stroke. */
+/** Tesseract reads glyphs more reliably with more pixels per stroke. */
 export const UPSCALE_FACTOR = 3
 
-/**
- * Ceiling on the pixels handed to Tesseract.
- *
- * The byte cap upstream bounds the *compressed* file, which says little: an
- * 8MB JPEG can decode to twelve megapixels, and tripling that would allocate
- * several hundred megabytes of intermediate buffers inside the offscreen
- * document. Four megapixels is around 2300x1730 — far more than a banner needs
- * to be legible.
- */
+/** Limits decoded-image memory, which compressed file size cannot predict. */
 export const MAX_OCR_PIXELS = 4_000_000
 
-/**
- * The scale this image can actually take: the requested upscale, reduced to
- * whatever keeps the result under `MAX_OCR_PIXELS`. A source already larger
- * than the ceiling comes back below 1, i.e. it is shrunk rather than grown.
- */
+/** Requested scale, reduced as needed to stay within the pixel ceiling. */
 export function scaleFactorFor(
   width: number,
   height: number,
@@ -39,10 +17,7 @@ export function scaleFactorFor(
   return Math.min(factor, Math.sqrt(MAX_OCR_PIXELS / pixels))
 }
 
-/**
- * Composites onto white. A transparent PNG left unflattened reads as black,
- * which turns dark text on a transparent background into black on black.
- */
+/** Composites transparency onto white before thresholding. */
 export function flattenOntoWhite(image: RgbaImage): RgbaImage {
   const out = new Uint8ClampedArray(image.data.length)
 
@@ -58,11 +33,7 @@ export function flattenOntoWhite(image: RgbaImage): RgbaImage {
   return { width: image.width, height: image.height, data: out }
 }
 
-/**
- * Nearest-neighbour resample: deterministic, and blocky edges do not hurt a
- * threshold pass. A factor below 1 shrinks, which is how an oversized banner
- * is brought under `MAX_OCR_PIXELS`.
- */
+/** Deterministic nearest-neighbour resampling; a factor below one shrinks. */
 export function upscale(image: RgbaImage, factor: number = UPSCALE_FACTOR): RgbaImage {
   if (factor === 1) return image
 
@@ -101,11 +72,7 @@ export function toGrayscale(image: RgbaImage): Uint8ClampedArray {
   return gray
 }
 
-/**
- * Otsu's method: the threshold that maximises between-class variance. Banners
- * are high-contrast by design, so this separates text from background far more
- * reliably than any fixed cutoff.
- */
+/** Otsu threshold, maximising between-class variance. */
 export function otsuThreshold(gray: Uint8ClampedArray): number {
   const histogram = new Array<number>(256).fill(0)
   for (const value of gray) histogram[value] = (histogram[value] ?? 0) + 1
@@ -143,14 +110,10 @@ export function otsuThreshold(gray: Uint8ClampedArray): number {
   return best
 }
 
-/**
- * True when the background is the darker class, i.e. light text on a dark
- * banner. Tesseract expects dark text on light, so this decides the inversion.
- */
+/** True for light text on a dark background. */
 export function isLightOnDark(gray: Uint8ClampedArray, threshold: number): boolean {
   let dark = 0
   for (const value of gray) if (value <= threshold) dark += 1
-  // The background is whichever class covers more of the image.
   return dark > gray.length / 2
 }
 
@@ -187,14 +150,11 @@ export function grayToRgba(gray: Uint8ClampedArray, width: number, height: numbe
   return { width, height, data }
 }
 
-/** The full §7 pipeline, in the order that section specifies. */
+/** The complete canvas-free OCR preprocessing pipeline. */
 export function preprocess(image: RgbaImage, factor: number = UPSCALE_FACTOR): RgbaImage {
   const effective = scaleFactorFor(image.width, image.height, factor)
 
-  // Flattening is a per-pixel operation and nearest-neighbour resampling only
-  // ever copies whole pixels, so the two commute: doing whichever shrinks the
-  // buffer first halves the peak allocation without changing a single output
-  // byte. §7's stated order is preserved in effect, not in literal sequence.
+  // Shrink first when possible to lower peak memory without changing pixels.
   const scaled =
     effective < 1
       ? flattenOntoWhite(upscale(image, effective))

@@ -43,13 +43,9 @@ export function decodeEntities(value: string): string {
   })
 }
 
-/**
- * Reads one attribute off every matching tag. Supports double-quoted,
- * single-quoted and unquoted values, which ESP-generated markup mixes freely.
- */
+/** Reads one attribute from matching tags, including quoted and unquoted values. */
 function attributeValues(html: string, tag: string, attribute: string): string[] {
-  // Whitespace before the name, not \b: `-` to `a` is a word boundary, so \b
-  // would read data-alt as alt and data-href as href.
+  // `\b` would mistake data-alt and data-href for alt and href.
   const pattern = new RegExp(
     `<${tag}\\b[^>]*?\\s${attribute}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s"'>]+))`,
     'gi',
@@ -78,15 +74,12 @@ export function extractHrefs(html: string): string[] {
   return attributeValues(html, 'a', 'href')
 }
 
-/** Image alt text — ESPs generate it from the design layer, so banners often carry their own code. */
+/** Image alt text. */
 export function extractAltTexts(html: string): string[] {
   return attributeValues(html, 'img', 'alt')
 }
 
-/**
- * Best-effort visible text. Tags collapse to a space rather than nothing, so
- * adjacent elements cannot fuse a label onto a code ("use code" + "SAVE20").
- */
+/** Best-effort visible text; tags become spaces so adjacent content cannot fuse. */
 export function extractVisibleText(html: string): string {
   return decodeEntities(
     stripNonContent(html).replace(/<[^>]+>/g, ' '),
@@ -95,20 +88,12 @@ export function extractVisibleText(html: string): string {
     .trim()
 }
 
-/**
- * Every attribute of every matching tag, grouped per tag.
- *
- * `attributeValues` above loses which tag a value came from, which is fine for
- * collecting alt text but useless for choosing an image: the decision needs
- * src, width, height and class together on the same element.
- */
+/** Every attribute of every matching tag, kept together per element. */
 export function extractTagAttributes(html: string, tag: string): Record<string, string>[] {
   const tags = new RegExp(`<${tag}\\b([^>]*)>`, 'gi')
   const attribute = /([a-zA-Z_:][-\w:.]*)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/g
 
-  // Same stripping as every other scanner here: ESP templates park whole
-  // `<img>` blocks inside MSO conditional comments, and an image nobody is
-  // shown must not cost a CDN fetch or one of the two OCR slots.
+  // Ignore conditional/commented markup that users do not see.
   return [...stripNonContent(html).matchAll(tags)].map((match) => {
     const attributes: Record<string, string> = {}
     for (const found of (match[1] ?? '').matchAll(attribute)) {

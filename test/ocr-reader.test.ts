@@ -377,6 +377,24 @@ test('a remote image too small in bytes never starts the engine', async () => {
   }
 })
 
+test('an oversized remote Content-Length is rejected before the body reaches OCR', async () => {
+  const harness = install()
+  try {
+    harness.setResponse(
+      new Response(new Uint8Array(1), {
+        status: 200,
+        headers: { 'content-type': 'image/png', 'content-length': '9000000' },
+      }),
+    )
+    const run = await readImages([remote('https://cdn.x/oversized.png')], 'm1', gmailWith(''))
+
+    assert.equal(harness.chrome.created, 0)
+    assert.equal(run.imagesRead, 0)
+  } finally {
+    harness.restore()
+  }
+})
+
 test('every image is attempted, not just the first one that answers', async () => {
   // The whole point of scanning everything: the code may be in image nine.
   const harness = install((request) => ({

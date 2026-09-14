@@ -23,6 +23,17 @@ export async function runWithSyncWatchdog<T>(
   }
 }
 
+export function shouldRelistWindow(options: {
+  checkpoint: BackfillCheckpoint | undefined
+  historyCursor: string | undefined
+  lastSync: number | undefined
+  now: number
+  force?: boolean
+}): boolean {
+  if (options.historyCursor) return false
+  return rollingRefreshIsDue(options.checkpoint, options.lastSync, options.now, options.force)
+}
+
 export function rollingRefreshIsDue(
   checkpoint: BackfillCheckpoint | undefined,
   lastSync: number | undefined,
