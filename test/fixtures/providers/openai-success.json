@@ -1,0 +1,20 @@
+{
+  "id": "chatcmpl-1",
+  "object": "chat.completion",
+  "model": "gpt-5.6-luna",
+  "choices": [
+    {
+      "index": 0,
+      "finish_reason": "stop",
+      "message": {
+        "role": "assistant",
+        "content": "{\"offers\": [{\"code\": \"SAVE20\", \"discount\": \"20%\", \"currency\": null, \"min_spend\": 2000, \"max_discount\": 500, \"expiry\": \"2026-09-30\", \"single_use\": null, \"new_users_only\": false, \"app_only\": true, \"categories\": [\"fashion\"], \"conditions\": \"Not valid on sale items\"}]}",
+        "refusal": null
+      }
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 2510,
+    "completion_tokens": 205
+  }
+}

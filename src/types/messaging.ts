@@ -1,3 +1,4 @@
+import type { ProviderId, Settings } from './llm.js'
 import type { OfferRecord } from './storage.js'
 
 /** Auth states the popup can render. Mirrors §5 of the design doc. */
@@ -30,6 +31,9 @@ export type PopupRequest =
   | { type: 'list-messages' }
   | { type: 'sync' }
   | { type: 'list-offers' }
+  | { type: 'get-settings' }
+  | { type: 'save-settings'; settings: Partial<Settings> }
+  | { type: 'clear-api-key' }
 
 export type PopupResponse =
   | {
@@ -38,5 +42,20 @@ export type PopupResponse =
       messages?: MessageSummary[]
       progress?: SyncProgress
       offers?: OfferRecord[]
+      settings?: SettingsView
     }
   | { ok: false; authState: AuthState; error: string }
+
+/**
+ * What the settings page is allowed to see. The raw key never leaves the
+ * service worker once it has been stored.
+ */
+export interface SettingsView {
+  provider: ProviderId
+  model: string
+  backfillDays: number
+  enableOcr: boolean
+  fetchRemoteImages: boolean
+  hasApiKey: boolean
+  apiKeyMasked: string
+}

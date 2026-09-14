@@ -71,6 +71,7 @@ export default defineConfig(({ mode }) => {
         input: {
           background: resolve(srcDir, 'background/index.ts'),
           popup: resolve(srcDir, 'popup/index.html'),
+          settings: resolve(srcDir, 'settings/index.html'),
         },
         output: {
           // The manifest holds literal paths, so entry names must be stable.

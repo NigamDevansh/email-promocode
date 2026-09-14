@@ -1,0 +1,19 @@
+{
+  "id": "chatcmpl-3",
+  "object": "chat.completion",
+  "choices": [
+    {
+      "index": 0,
+      "finish_reason": "length",
+      "message": {
+        "role": "assistant",
+        "content": "{\"offers\":[{\"code\":\"SAVE20\",\"dis",
+        "refusal": null
+      }
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 2510,
+    "completion_tokens": 800
+  }
+}

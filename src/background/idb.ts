@@ -99,7 +99,7 @@ export const indexedDbStore: Store = {
     )
   },
 
-  async deleteOffersExceptVersion(extractorVersion) {
+  async deleteStaleOffers(extractorVersion, requireLlm) {
     const db = await database()
     const transaction = db.transaction(OFFERS, 'readwrite')
     const done = new Promise<void>((resolve, reject) => {
@@ -114,7 +114,12 @@ export const indexedDbStore: Store = {
       if (!cursor) return
 
       const offer = cursor.value as Partial<OfferRecord>
-      if (offer.extractorVersion !== extractorVersion) cursor.delete()
+      if (
+        offer.extractorVersion !== extractorVersion ||
+        (requireLlm && offer.llmProcessed !== true)
+      ) {
+        cursor.delete()
+      }
       cursor.continue()
     }
     await done

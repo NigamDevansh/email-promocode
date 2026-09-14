@@ -30,6 +30,7 @@ function setup(pages: string[][], bodies: Record<string, string> = {}) {
     store,
     gmail,
     now: () => 1_757_600_000_000,
+    random: () => 0.5,
     budget,
     backfillDays: 45,
   })
@@ -201,7 +202,7 @@ test('a failing message is retried across wakes and never marked processed early
   gmail.failing.add('a')
   let currentTime = 1_757_600_000_000
 
-  for (let attempt = 0; attempt < 3; attempt += 1) {
+  for (let attempt = 0; attempt < 4; attempt += 1) {
     const result = await runBackfillSlice({ ...deps(10), now: () => currentTime })
     assert.equal(result.processed, 0, 'nothing commits while the head message fails')
     assert.match(result.error ?? '', /Gmail 500 on a/)
@@ -210,7 +211,7 @@ test('a failing message is retried across wakes and never marked processed early
     currentTime = result.nextAttemptAt ?? currentTime
   }
 
-  // Fourth attempt exhausts the cap and records a terminal failure.
+  // The fifth total attempt exhausts four retries and records a terminal failure.
   const final = await runBackfillSlice({ ...deps(10), now: () => currentTime })
 
   assert.equal(store.processed.get('a')?.status, 'failed')

@@ -1,7 +1,7 @@
 import type { BackfillCheckpoint } from '../types/storage.js'
 
 /** Bump when extraction behavior changes so stale cache entries are reprocessed. */
-export const EXTRACTOR_VERSION = 3
+export const EXTRACTOR_VERSION = 4
 
 export const META_KEYS = {
   backfill: 'backfill',
@@ -18,6 +18,7 @@ export function initialCheckpoint(query: string): BackfillCheckpoint {
     nextPageToken: null,
     processedCount: 0,
     extractorVersion: EXTRACTOR_VERSION,
+    llmProcessed: false,
     nextAttemptAt: null,
     attempts: {},
   }

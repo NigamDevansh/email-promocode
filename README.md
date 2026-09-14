@@ -7,9 +7,9 @@ client and, from phase 4 onward, your own LLM API key.
 
 Full design in [COUPON-EXTENSION-DESIGN.md](COUPON-EXTENSION-DESIGN.md).
 
-**Status: Phases 1–3 are implemented.** Automated type, unit and build checks
-pass. The final account-level check still requires your real Google client ID
-and Gmail test user.
+**Status: Phases 1–4 are implemented.** Automated type, unit and build checks
+pass. The final account-level checks still require your real Google client ID,
+Gmail test user and one configured LLM provider key.
 
 The extension currently:
 
@@ -19,10 +19,12 @@ The extension currently:
   restart-safe checkpoint;
 - decodes Gmail MIME content and extracts coupon candidates from links, image
   alt text, subjects and body text without a DOM or network parser;
-- displays only the stronger link/alt-text results for now, while retaining
-  subject/body guesses for the future LLM phase;
+- displays strong link/alt-text results without an API key and uses Anthropic,
+  OpenAI or Google Gemini to validate and enrich all candidate sources when a
+  provider key is configured;
 - stores processed-message records and deduplicated offers in local IndexedDB;
-  and
+- keeps provider settings and the user-supplied API key in local extension
+  storage, while returning only a masked key to the settings page; and
 - shows saved offers while disconnected, with search, copy and source-email
   links.
 
@@ -30,8 +32,8 @@ The popup currently requests each bounded scan slice. Closing it may leave the
 current slice to finish, but it stops requesting further slices; reopen the
 popup and press **Scan Promotions** to resume from the saved checkpoint. A
 completed backfill does not yet discover later emails automatically. Scheduled
-five-minute/history sync, LLM-enriched expiry/currency/conditions, chat, OCR and
-the 30-day expired-offer cleanup belong to later phases and are not implemented.
+five-minute/history sync, chat, OCR and the 30-day expired-offer cleanup belong
+to later phases and are not implemented.
 
 ## Requirements
 

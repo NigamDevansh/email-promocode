@@ -39,9 +39,14 @@ export function createMemoryStore(): MemoryStore {
       return [...offers.values()]
     },
 
-    async deleteOffersExceptVersion(extractorVersion) {
+    async deleteStaleOffers(extractorVersion, requireLlm) {
       for (const [key, offer] of offers) {
-        if (offer.extractorVersion !== extractorVersion) offers.delete(key)
+        if (
+          offer.extractorVersion !== extractorVersion ||
+          (requireLlm && !offer.llmProcessed)
+        ) {
+          offers.delete(key)
+        }
       }
     },
 

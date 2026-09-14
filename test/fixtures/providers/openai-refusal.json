@@ -1,0 +1,19 @@
+{
+  "id": "chatcmpl-2",
+  "object": "chat.completion",
+  "choices": [
+    {
+      "index": 0,
+      "finish_reason": "stop",
+      "message": {
+        "role": "assistant",
+        "content": null,
+        "refusal": "I'm sorry, I can't comply."
+      }
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 110,
+    "completion_tokens": 9
+  }
+}

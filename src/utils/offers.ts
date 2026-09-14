@@ -1,3 +1,4 @@
+import type { ExtractedOffer } from '../llm/extraction.js'
 import type { Candidate, CandidateSource } from '../types/extraction.js'
 import type { ParsedMessage } from '../types/gmail.js'
 import type { OfferRecord } from '../types/storage.js'
@@ -5,7 +6,7 @@ import { brandKeyFor, displayBrand } from './brand.js'
 import { expiryStateOf } from './expiry.js'
 import { EXTRACTOR_VERSION } from './storage.js'
 
-// Subject/body guesses remain future LLM input; only direct link/alt evidence is shown now.
+// Without an LLM, only direct link/alt evidence is strong enough to show.
 const PROMOTABLE: ReadonlySet<CandidateSource> = new Set(['link', 'alt'])
 
 /** String form of the IndexedDB compound key, used by the test store. */
@@ -25,6 +26,7 @@ export function buildOffers(message: ParsedMessage, candidates: Candidate[]): Of
 
     offers.push({
       extractorVersion: EXTRACTOR_VERSION,
+      llmProcessed: false,
       code: candidate.code,
       normalizedCode: candidate.normalized,
       brand,
@@ -55,7 +57,13 @@ export function buildOffers(message: ParsedMessage, candidates: Candidate[]): Of
 
 /** Combines duplicate brand/code records while keeping their source history. */
 export function mergeOffer(existing: OfferRecord | undefined, incoming: OfferRecord): OfferRecord {
-  if (!existing || existing.extractorVersion !== incoming.extractorVersion) return incoming
+  if (
+    !existing ||
+    existing.extractorVersion !== incoming.extractorVersion ||
+    existing.llmProcessed !== incoming.llmProcessed
+  ) {
+    return incoming
+  }
 
   const incomingIsNewer = incoming.sourceMessageDate >= existing.sourceMessageDate
   const newest = incomingIsNewer ? incoming : existing
@@ -111,4 +119,47 @@ export function searchOffers(offers: readonly OfferRecord[], query: string): Off
 
 export function gmailThreadUrl(offer: Pick<OfferRecord, 'sourceThreadId'>): string {
   return `https://mail.google.com/mail/u/0/#all/${offer.sourceThreadId}`
+}
+
+/**
+ * Phase 4: the LLM has confirmed each code against the candidate list, so a
+ * body-text code is now as trustworthy as a link parameter and the commercial
+ * fields are filled in. `needsReview` stays true only for OCR-derived codes,
+ * which never reach this path before phase 7.
+ */
+export function buildOffersFromExtraction(
+  message: ParsedMessage,
+  extracted: readonly ExtractedOffer[],
+  candidates: readonly Candidate[],
+): OfferRecord[] {
+  const brandKey = brandKeyFor(message.senderDomain, message.from)
+  const brand = displayBrand(message.from, brandKey)
+  const sourceOf = new Map(candidates.map((candidate) => [candidate.normalized, candidate.source]))
+
+  return extracted.map((offer) => ({
+    code: offer.code,
+    normalizedCode: offer.normalizedCode,
+    brand,
+    senderDomain: message.senderDomain,
+    brandKey,
+    discount: offer.discount,
+    currency: offer.currency,
+    minSpend: offer.minSpend,
+    maxDiscount: offer.maxDiscount,
+    expiry: offer.expiry,
+    singleUse: offer.singleUse,
+    newUsersOnly: offer.newUsersOnly,
+    appOnly: offer.appOnly,
+    categories: offer.categories,
+    conditions: offer.conditions,
+    source: sourceOf.get(offer.normalizedCode) === 'link' ? 'link' : 'text',
+    needsReview: false,
+    extractorVersion: EXTRACTOR_VERSION,
+    llmProcessed: true,
+    sourceMessageIds: [message.id],
+    sourceThreadId: message.threadId,
+    sourceSender: message.from,
+    sourceSubject: message.subject,
+    sourceMessageDate: message.internalDate,
+  }))
 }

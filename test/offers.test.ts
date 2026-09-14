@@ -44,6 +44,7 @@ const candidate = (source: Candidate['source'], code: string, score = 5): Candid
 function offer(overrides: Partial<OfferRecord> = {}): OfferRecord {
   return {
     extractorVersion: EXTRACTOR_VERSION,
+    llmProcessed: false,
     code: 'SAVE20',
     normalizedCode: 'SAVE20',
     brand: 'Myntra',
@@ -166,6 +167,21 @@ test('a new extractor does not inherit stale evidence from an old version', () =
   })
 
   assert.deepEqual(mergeOffer(oldLink, currentAlt), currentAlt)
+})
+
+test('an LLM result replaces the same-version free-path placeholder', () => {
+  const free = offer({
+    llmProcessed: false,
+    source: 'link',
+    sourceMessageIds: ['free-message'],
+  })
+  const enriched = offer({
+    llmProcessed: true,
+    discount: '20%',
+    sourceMessageIds: ['llm-message'],
+  })
+
+  assert.deepEqual(mergeOffer(free, enriched), enriched)
 })
 
 test('expiry is evaluated at read time, with expired offers kept and sorted last', () => {

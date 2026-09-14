@@ -13,8 +13,8 @@ import { authorizedFetch } from './auth.js'
 
 const GMAIL_BASE = 'https://gmail.googleapis.com/gmail/v1/users/me'
 
-/** §6: 45 days keeps the first run to 300-400 messages. Configurable in phase 4. */
-export const BACKFILL_DAYS = 45
+/** §6: used only when callers have not loaded the user's configured window. */
+const DEFAULT_BACKFILL_DAYS = 45
 
 /** §6: start conservatively; raise only if measured sync time demands it. */
 const FETCH_CONCURRENCY = 5
@@ -46,10 +46,11 @@ async function gmailJson<T>(path: string, deps: AuthorizedFetchDeps): Promise<T>
 export async function listPromotionMessageRefs(
   deps: AuthorizedFetchDeps,
   maxResults: number,
+  newerThanDays: number = DEFAULT_BACKFILL_DAYS,
 ): Promise<GmailMessageRef[]> {
   const query = new URLSearchParams({
     labelIds: 'CATEGORY_PROMOTIONS',
-    q: `newer_than:${BACKFILL_DAYS}d`,
+    q: `newer_than:${newerThanDays}d`,
     maxResults: String(maxResults),
   })
   const page = await gmailJson<GmailListResponse>(`/messages?${query}`, deps)
@@ -83,8 +84,9 @@ async function fetchSummary(
 export async function listPromotionSummaries(
   deps: AuthorizedFetchDeps,
   maxResults: number,
+  newerThanDays: number = DEFAULT_BACKFILL_DAYS,
 ): Promise<MessageSummary[]> {
-  const refs = await listPromotionMessageRefs(deps, maxResults)
+  const refs = await listPromotionMessageRefs(deps, maxResults, newerThanDays)
   const summaries = await mapWithConcurrency(refs, FETCH_CONCURRENCY, (ref) =>
     fetchSummary(ref, deps),
   )

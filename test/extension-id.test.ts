@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { deriveExtensionId, readManifestKey } from '../scripts/extension-id.ts'
 
@@ -17,4 +18,17 @@ test('different keys derive different IDs', () => {
   const a = Buffer.from('public key one').toString('base64')
   const b = Buffer.from('public key two').toString('base64')
   assert.notEqual(deriveExtensionId(a), deriveExtensionId(b))
+})
+
+test('the packaged extension can call Gmail and every supported LLM provider', () => {
+  const manifest = JSON.parse(readFileSync('manifest.template.json', 'utf8')) as {
+    host_permissions?: string[]
+  }
+
+  assert.deepEqual(manifest.host_permissions, [
+    'https://gmail.googleapis.com/*',
+    'https://api.anthropic.com/*',
+    'https://api.openai.com/*',
+    'https://generativelanguage.googleapis.com/*',
+  ])
 })

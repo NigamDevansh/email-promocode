@@ -246,7 +246,7 @@ complete({ system, user, schema, maxTokens })
 | Auth header | `x-api-key: <key>` | `Authorization: Bearer <key>` | `x-goog-api-key: <key>` |
 | Required extra header | `anthropic-version: 2023-06-01` | — | — |
 | Browser origin | `anthropic-dangerous-direct-browser-access: true` | — | — |
-| System prompt | top-level `system` | first message with `role: "system"` | top-level `systemInstruction` |
+| System prompt | top-level `system` | first message with `role: "developer"` | top-level `systemInstruction` |
 | Output limit | `max_tokens` | `max_completion_tokens` where supported | `generationConfig.maxOutputTokens` |
 | Reading the reply | `content[]` text/tool blocks | `choices[0].message.content` | `candidates[0].content.parts[]` text blocks |
 | Structured output | tool with `input_schema` | strict JSON schema response format | `generationConfig.responseMimeType` plus `responseJsonSchema` |

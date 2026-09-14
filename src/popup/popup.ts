@@ -6,6 +6,7 @@ import { gmailThreadUrl, searchOffers, sortOffersForDisplay } from '../utils/off
 const statusEl = document.querySelector<HTMLParagraphElement>('#status')!
 const connectEl = document.querySelector<HTMLButtonElement>('#connect')!
 const refreshEl = document.querySelector<HTMLButtonElement>('#refresh')!
+const settingsEl = document.querySelector<HTMLButtonElement>('#settings')!
 const listEl = document.querySelector<HTMLUListElement>('#messages')!
 const scanEl = document.querySelector<HTMLButtonElement>('#scan')!
 const progressEl = document.querySelector<HTMLParagraphElement>('#progress')!
@@ -193,7 +194,7 @@ async function loadMessages(): Promise<void> {
   const messages = response.messages ?? []
   statusEl.textContent = messages.length
     ? `${messages.length} recent promotional emails.`
-    : 'No promotional email in the last 45 days.'
+    : 'No recent promotional email found.'
   refreshEl.hidden = false
   scanEl.hidden = false
   renderMessages(messages)
@@ -218,6 +219,10 @@ refreshEl.addEventListener('click', () => {
 
 scanEl.addEventListener('click', () => {
   void scanInbox()
+})
+
+settingsEl.addEventListener('click', () => {
+  void chrome.runtime.openOptionsPage()
 })
 
 searchEl.addEventListener('input', () => {

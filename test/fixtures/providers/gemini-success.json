@@ -1,0 +1,22 @@
+{
+  "candidates": [
+    {
+      "finishReason": "STOP",
+      "content": {
+        "role": "model",
+        "parts": [
+          {
+            "text": "{\"offers\": [{\"code\": \"SAVE20\", \"discount"
+          },
+          {
+            "text": "\": \"20%\", \"currency\": null, \"min_spend\": 2000, \"max_discount\": 500, \"expiry\": \"2026-09-30\", \"single_use\": null, \"new_users_only\": false, \"app_only\": true, \"categories\": [\"fashion\"], \"conditions\": \"Not valid on sale items\"}]}"
+          }
+        ]
+      }
+    }
+  ],
+  "usageMetadata": {
+    "promptTokenCount": 2495,
+    "candidatesTokenCount": 198
+  }
+}

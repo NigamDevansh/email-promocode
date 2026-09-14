@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Inbox Coupon Assistant — Settings</title>
+    <link rel="stylesheet" href="./settings.css" />
+  </head>
+  <body>
+    <main>
+      <h1>Inbox Coupon Assistant</h1>
+
+      <section class="notice">
+        <h2>What leaves this machine</h2>
+        <p>
+          Coupon extraction and chat send the relevant text of your promotional
+          emails — subject, sender and body — to the LLM provider you select
+          below, using your own API key and account. Nothing is sent anywhere
+          else: there is no backend for this extension and no telemetry.
+        </p>
+        <p>
+          Gmail is read directly by your browser through your own Google Cloud
+          project. Coupons, chat history and sync state stay in this browser
+          profile.
+        </p>
+      </section>
+
+      <form id="form">
+        <fieldset>
+          <legend>LLM provider</legend>
+
+          <label for="provider">Provider</label>
+          <select id="provider" name="provider"></select>
+
+          <label for="model">Model</label>
+          <input id="model" name="model" type="text" spellcheck="false" autocomplete="off" />
+          <p class="hint">
+            Extraction is a simple structured-output task; the cheapest tier is
+            genuinely sufficient.
+          </p>
+
+          <label for="apiKey">API key</label>
+          <input
+            id="apiKey"
+            name="apiKey"
+            type="password"
+            spellcheck="false"
+            autocomplete="off"
+            placeholder="Paste a key to set or replace it"
+          />
+          <p class="hint" id="keyState"></p>
+          <p class="hint">
+            Stored unencrypted in this browser profile. Use a key scoped to this
+            project alone and set a spend limit in the provider console.
+          </p>
+          <button type="button" id="clearKey" class="secondary">Remove stored key</button>
+        </fieldset>
+
+        <fieldset>
+          <legend>Scanning</legend>
+
+          <label for="backfillDays">Days of mail to scan</label>
+          <input id="backfillDays" name="backfillDays" type="number" min="1" max="365" />
+          <p class="hint">
+            45 days keeps the first run to a few hundred messages. A longer
+            window finds welcome and birthday codes that do not expire, at
+            proportionally more time and cost.
+          </p>
+
+          <label class="checkbox">
+            <input id="fetchRemoteImages" name="fetchRemoteImages" type="checkbox" />
+            Fetch remote images from retailer CDNs
+          </label>
+          <p class="hint">
+            Off by default: fetching a remote image registers an open with the
+            sender.
+          </p>
+
+          <label class="checkbox">
+            <input id="enableOcr" name="enableOcr" type="checkbox" />
+            Enable image OCR
+          </label>
+          <p class="hint">Requires the optional bundled OCR module.</p>
+        </fieldset>
+
+        <div class="actions">
+          <button type="submit">Save</button>
+          <span id="status" role="status"></span>
+        </div>
+      </form>
+    </main>
+
+    <script type="module" src="./settings.ts"></script>
+  </body>
+</html>

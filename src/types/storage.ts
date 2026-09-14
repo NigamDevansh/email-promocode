@@ -1,4 +1,5 @@
 import type { Candidate } from './extraction.js'
+import type { TokenUsage } from './llm.js'
 
 export type ProcessedStatus = 'no-code' | 'candidates' | 'ignored' | 'failed'
 
@@ -10,6 +11,9 @@ export interface ProcessedRecord {
   messageId: string
   threadId: string
   extractorVersion: number
+  /** True once this message no longer needs a future LLM pass. */
+  llmProcessed: boolean
+  llmUsage?: TokenUsage
   status: ProcessedStatus
   processedAt: number
   candidates: Candidate[]
@@ -24,6 +28,8 @@ export interface ProcessedRecord {
 export interface OfferRecord {
   /** Extractor that produced this derived row; used for safe cache migrations. */
   extractorVersion: number
+  /** False for a free-only result that should be revisited after key setup. */
+  llmProcessed: boolean
   code: string
   normalizedCode: string
   brand: string
@@ -57,6 +63,8 @@ export interface BackfillCheckpoint {
   nextPageToken: string | null
   processedCount: number
   extractorVersion: number
+  /** True only after a configured LLM completed this whole scan window. */
+  llmProcessed?: boolean
   nextAttemptAt: number | null
   /** Attempts per message ID, so one broken message cannot block the scan. */
   attempts: Record<string, number>
@@ -71,7 +79,7 @@ export interface Store {
   /** One transaction: offers and the processed record land together or not at all. */
   commitMessage(record: ProcessedRecord, offers: OfferRecord[]): Promise<void>
   listOffers(): Promise<OfferRecord[]>
-  deleteOffersExceptVersion(extractorVersion: number): Promise<void>
+  deleteStaleOffers(extractorVersion: number, requireLlm: boolean): Promise<void>
   getMeta<T>(key: string): Promise<T | undefined>
   setMeta<T>(key: string, value: T): Promise<void>
 }

@@ -2,16 +2,23 @@ import type {
   AuthState,
   PopupRequest,
   PopupResponse,
+  SettingsView,
   SyncProgress,
 } from '../types/messaging.js'
 import type { AuthorizedFetchDeps } from '../types/auth.js'
+import type { Settings } from '../types/llm.js'
+import { maskApiKey } from '../utils/settings.js'
 import type { BackfillCheckpoint } from '../types/storage.js'
 import { META_KEYS } from '../utils/storage.js'
 import { authStateForError, ReauthRequiredError } from './auth.js'
+import { adapterFor } from '../llm/index.js'
+import { RequestQueue } from '../llm/queue.js'
+import { isConfigured } from '../utils/settings.js'
 import { runBackfillSlice } from './backfill.js'
 import { chromeTokens, requestAuthToken } from './chrome-tokens.js'
-import { BACKFILL_DAYS, createGmailPort, listPromotionSummaries } from './gmail.js'
+import { createGmailPort, listPromotionSummaries } from './gmail.js'
 import { indexedDbStore } from './idb.js'
+import { clearApiKey, readSettings, writeSettings } from './settings.js'
 import { readAuthState, writeAuthState } from './state.js'
 
 /** Keep the popup preview small; the backfill uses its own paginated listing. */
@@ -57,13 +64,37 @@ async function connect(): Promise<PopupResponse> {
   }
 }
 
+/**
+ * §6: one provider queue for the whole worker. Chat will share this instance so
+ * an interactive turn can jump ahead of queued backfill work.
+ */
+const llmQueue = new RequestQueue({
+  minSpacingMs: 1200,
+  now: () => Date.now(),
+  sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+})
+
+let settingsRevision = 0
+
 async function runSync(): Promise<SyncProgress> {
+  const settings = await readSettings()
+  const revision = settingsRevision
+
   const result = await runBackfillSlice({
     store: indexedDbStore,
     gmail: createGmailPort(deps),
     now: () => Date.now(),
+    shouldContinue: () => revision === settingsRevision,
     budget: SLICE_BUDGET,
-    backfillDays: BACKFILL_DAYS,
+    backfillDays: settings.backfillDays,
+    llm: isConfigured(settings)
+      ? {
+          adapter: adapterFor(settings.provider),
+          settings,
+          queue: llmQueue,
+          fetchImpl: (...args) => fetch(...args),
+        }
+      : undefined,
   })
 
   const checkpoint = await indexedDbStore.getMeta<BackfillCheckpoint>(META_KEYS.backfill)
@@ -92,6 +123,31 @@ function syncOnce(): Promise<SyncProgress> {
   return inFlightSync
 }
 
+/** Strips the stored key down to a mask before it leaves the worker. */
+function viewOf(settings: Settings): SettingsView {
+  return {
+    provider: settings.provider,
+    model: settings.model,
+    backfillDays: settings.backfillDays,
+    enableOcr: settings.enableOcr,
+    fetchRemoteImages: settings.fetchRemoteImages,
+    hasApiKey: settings.apiKey.length > 0,
+    apiKeyMasked: maskApiKey(settings.apiKey),
+  }
+}
+
+async function updateSettings(patch: Partial<Settings>): Promise<Settings> {
+  const after = await writeSettings(patch)
+  settingsRevision += 1
+  return after
+}
+
+async function removeApiKey(): Promise<Settings> {
+  const settings = await clearApiKey()
+  settingsRevision += 1
+  return settings
+}
+
 async function handle(request: PopupRequest): Promise<PopupResponse> {
   switch (request.type) {
     case 'get-state':
@@ -102,7 +158,12 @@ async function handle(request: PopupRequest): Promise<PopupResponse> {
 
     case 'list-messages': {
       if ((await readAuthState()) === 'reauth_required') throw new ReauthRequiredError()
-      const messages = await listPromotionSummaries(deps, POPUP_MESSAGE_LIMIT)
+      const settings = await readSettings()
+      const messages = await listPromotionSummaries(
+        deps,
+        POPUP_MESSAGE_LIMIT,
+        settings.backfillDays,
+      )
       await writeAuthState('connected')
       return { ok: true, authState: 'connected', messages }
     }
@@ -110,6 +171,19 @@ async function handle(request: PopupRequest): Promise<PopupResponse> {
     case 'list-offers': {
       return { ok: true, authState: await readAuthState(), offers: await indexedDbStore.listOffers() }
     }
+
+    case 'get-settings':
+      return { ok: true, authState: await readAuthState(), settings: viewOf(await readSettings()) }
+
+    case 'save-settings':
+      return {
+        ok: true,
+        authState: await readAuthState(),
+        settings: viewOf(await updateSettings(request.settings)),
+      }
+
+    case 'clear-api-key':
+      return { ok: true, authState: await readAuthState(), settings: viewOf(await removeApiKey()) }
 
     case 'sync': {
       if ((await readAuthState()) === 'reauth_required') throw new ReauthRequiredError()

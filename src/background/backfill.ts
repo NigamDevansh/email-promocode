@@ -7,19 +7,32 @@ import {
 } from '../types/storage.js'
 import { gateMessage } from '../utils/candidates.js'
 import { hydrateExternalParts, parseGmailMessage } from '../utils/mime.js'
-import { buildOffers } from '../utils/offers.js'
+import { extractMessageOffers } from '../llm/extract-message.js'
+import { LlmError } from '../types/llm.js'
+import { buildOffers, buildOffersFromExtraction } from '../utils/offers.js'
 import { EXTRACTOR_VERSION, initialCheckpoint, META_KEYS } from '../utils/storage.js'
 import { NotConnectedError, ReauthRequiredError } from './auth.js'
 import { GmailApiError } from './gmail.js'
 
-/** §6: cap retries at four, then record a terminal failure and move on. */
-const MAX_ATTEMPTS = 4
+/** §6: retry a transient failure at most four times, then move on. */
+const MAX_RETRIES = 4
 const PAGE_SIZE = 50
 const RETRY_BASE_MS = 30_000
 const MAX_PAGE_FETCHES = 10
 
+class MessageLlmError extends Error {
+  constructor(
+    readonly llmError: LlmError,
+    readonly fallback: MessageExtraction,
+  ) {
+    super(llmError.message)
+    this.name = 'MessageLlmError'
+  }
+}
+
 function isRetryable(error: unknown): boolean {
   if (error instanceof TypeError) return true
+  if (error instanceof LlmError) return error.retryable
   return (
     error instanceof GmailApiError &&
     (error.status === 408 || error.status === 429 || error.status >= 500)
@@ -35,6 +48,7 @@ async function extractOne(messageId: string, deps: BackfillDeps): Promise<Messag
         messageId: message.id,
         threadId: message.threadId,
         extractorVersion: EXTRACTOR_VERSION,
+        llmProcessed: true,
         status: 'ignored',
         processedAt: deps.now(),
         candidates: [],
@@ -54,24 +68,60 @@ async function extractOne(messageId: string, deps: BackfillDeps): Promise<Messag
     html = hydrated.html
   }
 
-  const gate = gateMessage({ ...parsed, text, html })
+  const hydrated = { ...parsed, text, html }
+  const gate = gateMessage(hydrated)
+
+  // §7: the LLM stage runs only when the free stages found something worth
+  // spending a token on. A no-code message never reaches a provider.
+  let offers = buildOffers(hydrated, gate.candidates)
+  const shouldRunLlm = Boolean(deps.llm && gate.shouldExtract && gate.candidates.length > 0)
+  let llmProcessed = !gate.shouldExtract || gate.candidates.length === 0
+  let llmUsage: ProcessedRecord['llmUsage']
+
+  if (shouldRunLlm && deps.llm) {
+    try {
+      const run = await extractMessageOffers(hydrated, gate.candidates, deps.llm)
+      offers = buildOffersFromExtraction(hydrated, run.offers, gate.candidates)
+      llmProcessed = true
+      llmUsage = run.usage
+    } catch (error) {
+      if (!(error instanceof LlmError)) throw error
+
+      throw new MessageLlmError(error, {
+        record: {
+          messageId: parsed.id,
+          threadId: parsed.threadId,
+          extractorVersion: EXTRACTOR_VERSION,
+          llmProcessed: true,
+          status: 'failed',
+          processedAt: deps.now(),
+          candidates: gate.candidates,
+          error: error.message,
+        },
+        // Keep Phase 3's direct evidence if the model cannot enrich it.
+        offers: offers.map((offer) => ({ ...offer, llmProcessed: true })),
+      })
+    }
+  }
 
   return {
     record: {
       messageId: parsed.id,
       threadId: parsed.threadId,
       extractorVersion: EXTRACTOR_VERSION,
+      llmProcessed,
+      ...(llmUsage ? { llmUsage } : {}),
       status: gate.shouldExtract ? 'candidates' : 'no-code',
       processedAt: deps.now(),
       candidates: gate.candidates,
     },
-    offers: buildOffers({ ...parsed, text, html }, gate.candidates),
+    offers,
   }
 }
 
 /** Processes one checkpointed, restart-safe slice of the first-run backfill. */
 export async function runBackfillSlice(deps: BackfillDeps): Promise<BackfillResult> {
-  const { store, gmail, now, budget, backfillDays } = deps
+  const { store, gmail, now, random = Math.random, budget, backfillDays } = deps
   const query = `newer_than:${backfillDays}d`
 
   let checkpoint =
@@ -88,7 +138,12 @@ export async function runBackfillSlice(deps: BackfillDeps): Promise<BackfillResu
   }
 
   if (checkpoint.status === 'complete') {
-    return { processed: 0, skipped: 0, withCandidates: 0, remaining: false }
+    if (deps.llm && checkpoint.llmProcessed !== true) {
+      checkpoint = initialCheckpoint(query)
+      await store.setMeta(META_KEYS.backfill, checkpoint)
+    } else {
+      return { processed: 0, skipped: 0, withCandidates: 0, remaining: false }
+    }
   }
 
   if (checkpoint.nextAttemptAt && checkpoint.nextAttemptAt > now()) {
@@ -114,12 +169,14 @@ export async function runBackfillSlice(deps: BackfillDeps): Promise<BackfillResu
   }
 
   const finish = async (): Promise<void> => {
-    await store.deleteOffersExceptVersion(EXTRACTOR_VERSION)
-    await save({ ...checkpoint, status: 'complete' })
+    await store.deleteStaleOffers(EXTRACTOR_VERSION, Boolean(deps.llm))
+    await save({ ...checkpoint, status: 'complete', llmProcessed: Boolean(deps.llm) })
     complete = true
   }
 
   while (examined < budget) {
+    if (deps.shouldContinue && !deps.shouldContinue()) break
+
     if (checkpoint.currentPageMessageIds.length === 0) {
       if (checkpoint.status === 'running' && checkpoint.nextPageToken === null) {
         await finish()
@@ -159,7 +216,10 @@ export async function runBackfillSlice(deps: BackfillDeps): Promise<BackfillResu
     const rest = checkpoint.currentPageMessageIds.slice(1)
 
     const existing = await store.getProcessed(messageId)
-    if (existing && existing.extractorVersion === EXTRACTOR_VERSION) {
+    const needsLlmPass = Boolean(
+      deps.llm && existing?.status === 'candidates' && existing.llmProcessed !== true,
+    )
+    if (existing && existing.extractorVersion === EXTRACTOR_VERSION && !needsLlmPass) {
       const pageComplete = rest.length === 0 && checkpoint.nextPageToken === null
       await save({
         ...checkpoint,
@@ -182,17 +242,32 @@ export async function runBackfillSlice(deps: BackfillDeps): Promise<BackfillResu
       record = extraction.record
       offers = extraction.offers
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      if (error instanceof NotConnectedError || error instanceof ReauthRequiredError) throw error
+      const failure = error instanceof MessageLlmError ? error.llmError : error
+      const message = failure instanceof Error ? failure.message : String(failure)
+      if (failure instanceof NotConnectedError || failure instanceof ReauthRequiredError) {
+        throw failure
+      }
 
-      const retryable = isRetryable(error)
-      if (error instanceof GmailApiError && error.status !== 404 && !retryable) {
-        throw error
+      const retryable = isRetryable(failure)
+      if (failure instanceof GmailApiError && failure.status !== 404 && !retryable) {
+        throw failure
+      }
+      // §6: never retry authentication or invalid-model errors. They are
+      // settings problems, so stop the slice instead of marking this message
+      // failed and poisoning the completion cache for every message after it.
+      if (
+        failure instanceof LlmError &&
+        (failure.kind === 'auth' || failure.kind === 'model')
+      ) {
+        throw failure
       }
 
       const attempts = (checkpoint.attempts[messageId] ?? 0) + 1
-      if (retryable && attempts < MAX_ATTEMPTS) {
-        const nextAttemptAt = now() + RETRY_BASE_MS * 2 ** (attempts - 1)
+      if (retryable && attempts <= MAX_RETRIES) {
+        const jitter = 0.75 + random() * 0.5
+        const exponentialDelay = RETRY_BASE_MS * 2 ** (attempts - 1) * jitter
+        const providerDelay = failure instanceof LlmError ? failure.retryAfterMs ?? 0 : 0
+        const nextAttemptAt = now() + Math.max(exponentialDelay, providerDelay)
         await save({
           ...checkpoint,
           attempts: { ...checkpoint.attempts, [messageId]: attempts },
@@ -209,14 +284,20 @@ export async function runBackfillSlice(deps: BackfillDeps): Promise<BackfillResu
       }
 
       // Deleted messages and deterministic parser failures are terminal.
-      record = {
-        messageId,
-        threadId: '',
-        extractorVersion: EXTRACTOR_VERSION,
-        status: 'failed',
-        processedAt: now(),
-        candidates: [],
-        error: message,
+      if (error instanceof MessageLlmError) {
+        record = error.fallback.record
+        offers = error.fallback.offers
+      } else {
+        record = {
+          messageId,
+          threadId: '',
+          extractorVersion: EXTRACTOR_VERSION,
+          llmProcessed: true,
+          status: 'failed',
+          processedAt: now(),
+          candidates: [],
+          error: message,
+        }
       }
     }
 

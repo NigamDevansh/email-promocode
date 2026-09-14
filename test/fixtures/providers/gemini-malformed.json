@@ -1,0 +1,19 @@
+{
+  "candidates": [
+    {
+      "finishReason": "STOP",
+      "content": {
+        "role": "model",
+        "parts": [
+          {
+            "text": "Here are the offers you asked for."
+          }
+        ]
+      }
+    }
+  ],
+  "usageMetadata": {
+    "promptTokenCount": 200,
+    "candidatesTokenCount": 15
+  }
+}

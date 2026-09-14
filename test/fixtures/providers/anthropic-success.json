@@ -1,0 +1,37 @@
+{
+  "id": "msg_01",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-haiku-4-5-20251001",
+  "stop_reason": "tool_use",
+  "content": [
+    {
+      "type": "tool_use",
+      "id": "toolu_01",
+      "name": "record_offers",
+      "input": {
+        "offers": [
+          {
+            "code": "SAVE20",
+            "discount": "20%",
+            "currency": null,
+            "min_spend": 2000,
+            "max_discount": 500,
+            "expiry": "2026-09-30",
+            "single_use": null,
+            "new_users_only": false,
+            "app_only": true,
+            "categories": [
+              "fashion"
+            ],
+            "conditions": "Not valid on sale items"
+          }
+        ]
+      }
+    }
+  ],
+  "usage": {
+    "input_tokens": 2480,
+    "output_tokens": 190
+  }
+}

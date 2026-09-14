@@ -27,7 +27,7 @@ test('lists recent Promotions messages and returns newest summaries first', asyn
 
       if (url.pathname.endsWith('/messages')) {
         assert.equal(url.searchParams.get('labelIds'), 'CATEGORY_PROMOTIONS')
-        assert.equal(url.searchParams.get('q'), 'newer_than:45d')
+        assert.equal(url.searchParams.get('q'), 'newer_than:90d')
         assert.equal(url.searchParams.get('maxResults'), '2')
         return jsonResponse({
           messages: [
@@ -59,7 +59,7 @@ test('lists recent Promotions messages and returns newest summaries first', asyn
     },
   }
 
-  const summaries = await listPromotionSummaries(deps, 2)
+  const summaries = await listPromotionSummaries(deps, 2, 90)
 
   assert.equal(detailRequests.length, 2)
   assert.deepEqual(
