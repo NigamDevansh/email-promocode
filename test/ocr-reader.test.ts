@@ -21,9 +21,12 @@ interface FakeChrome {
 
 function install(reply: FakeChrome['reply'] = () => ({ ok: true, result: read('RAKE25') })): {
   chrome: FakeChrome
+  fetches: FetchCall[]
+  setResponse: (response: Response | null) => void
   restore: () => void
 } {
   const state: FakeChrome = { contexts: [], created: 0, closed: 0, sent: [], reply }
+  let response: Response | null = null
 
   const fake = {
     runtime: {
@@ -49,15 +52,37 @@ function install(reply: FakeChrome['reply'] = () => ({ ok: true, result: read('R
 
   const globals = globalThis as unknown as { chrome: unknown; fetch: unknown }
   const realChrome = globals.chrome
+  const realFetch = globals.fetch
   globals.chrome = fake
+
+  const fetches: FetchCall[] = []
+  globals.fetch = async (url: string, init?: RequestInit) => {
+    fetches.push({ url: String(url), init })
+    if (!response) throw new Error('no response configured')
+    // A body can only be read once, and one test reads nine images.
+    return response.clone()
+  }
 
   return {
     chrome: state,
+    fetches,
+    setResponse: (next: Response | null) => {
+      response = next
+    },
     restore: () => {
       globals.chrome = realChrome
+      globals.fetch = realFetch
     },
   }
 }
+
+interface FetchCall {
+  url: string
+  init: RequestInit | undefined
+}
+
+const imageResponse = (bytes: number, type = 'image/png'): Response =>
+  new Response(new Uint8Array(bytes), { status: 200, headers: { 'content-type': type } })
 
 /** A confident single-word read, which section 11's floors let through. */
 const read = (word: string): { text: string; words: { text: string; confidence: number }[]; meanConfidence: number } => ({
@@ -70,11 +95,24 @@ const inline = (attachmentId: string, mimeType: string = 'image/jpeg'): ImageCan
   source: 'inline',
   attachmentId,
   data: null,
+  url: null,
   width: null,
   height: null,
   pixelArea: null,
   byteSize: 90_000,
   mimeType,
+})
+
+const remote = (url: string): ImageCandidate => ({
+  source: 'remote',
+  attachmentId: null,
+  data: null,
+  url,
+  width: 600,
+  height: 400,
+  pixelArea: 240_000,
+  byteSize: null,
+  mimeType: null,
 })
 
 /** Big enough to clear the "too small to hold legible text" floor. */
@@ -217,19 +255,20 @@ test('one message cannot spend the budget the next message needs', { timeout: 50
   const harness = install('hang')
   try {
     const pending = readImages(
-      [inline('att-1'), inline('att-2'), inline('att-3')],
+      [inline('att-1'), inline('att-2'), inline('att-3'), inline('att-4')],
       'm1',
       gmailWith(BIG_BASE64),
     )
 
-    // Two images each burn the recognize timeout; the third is past the budget.
-    for (let image = 0; image < 3; image += 1) {
+    // Three images each burn the recognize timeout; the fourth is past the
+    // 90-second message budget, which is now the only thing that stops OCR.
+    for (let image = 0; image < 4; image += 1) {
       await new Promise((resolve) => setImmediate(resolve))
       t.mock.timers.tick(30_000)
     }
 
     await pending
-    assert.equal(harness.chrome.sent.length, 2, 'the third was never started')
+    assert.equal(harness.chrome.sent.length, 3, 'the fourth was never started')
   } finally {
     harness.restore()
   }
@@ -273,6 +312,104 @@ test('closing an engine that never started is not an error', async () => {
   try {
     await closeOcrEngine()
     assert.equal(harness.chrome.closed, 0)
+  } finally {
+    harness.restore()
+  }
+})
+
+// ------------------------------------------- reading the sender's own banners
+
+test('a remote banner is fetched without cookies and without a referrer', async () => {
+  const harness = install()
+  try {
+    harness.setResponse(imageResponse(50_000))
+    const run = await readImages([remote('https://cdn.x/hero.png')], 'm1', gmailWith(''))
+
+    assert.equal(harness.fetches.length, 1)
+    assert.equal(harness.fetches[0]?.url, 'https://cdn.x/hero.png')
+    assert.equal(harness.fetches[0]?.init?.credentials, 'omit')
+    assert.equal(harness.fetches[0]?.init?.referrerPolicy, 'no-referrer')
+    assert.equal(run.imagesRead, 1)
+  } finally {
+    harness.restore()
+  }
+})
+
+test('an inline part is never fetched off the network', async () => {
+  const harness = install()
+  try {
+    await readImages([inline('att-1')], 'm1', gmailWith(BIG_BASE64))
+
+    assert.deepEqual(harness.fetches, [], 'Gmail already served it; the sender learns nothing')
+  } finally {
+    harness.restore()
+  }
+})
+
+test('a response that is not an image is dropped before it reaches the engine', async () => {
+  const harness = install()
+  try {
+    harness.setResponse(
+      new Response('<html>not found</html>', {
+        status: 200,
+        headers: { 'content-type': 'text/html' },
+      }),
+    )
+    const run = await readImages([remote('https://cdn.x/gone.png')], 'm1', gmailWith(''))
+
+    assert.deepEqual(harness.chrome.sent, [])
+    assert.equal(run.imagesRead, 0)
+  } finally {
+    harness.restore()
+  }
+})
+
+test('a remote image too small in bytes never starts the engine', async () => {
+  const harness = install()
+  try {
+    harness.setResponse(imageResponse(900))
+    const run = await readImages([remote('https://cdn.x/dot.png')], 'm1', gmailWith(''))
+
+    assert.equal(harness.chrome.created, 0, 'not even the offscreen document is worth it')
+    assert.equal(run.imagesRead, 0)
+  } finally {
+    harness.restore()
+  }
+})
+
+test('every image is attempted, not just the first one that answers', async () => {
+  // The whole point of scanning everything: the code may be in image nine.
+  const harness = install((request) => ({
+    ok: true,
+    result: request.dataUrl.length > 0 ? read('RAKE25') : read('NOPE'),
+  }))
+  try {
+    harness.setResponse(imageResponse(50_000))
+    const banners = Array.from({ length: 9 }, (_, index) =>
+      remote(`https://cdn.x/${index}.png`))
+
+    const run = await readImages(banners, 'm1', gmailWith(''))
+
+    assert.equal(harness.fetches.length, 9, 'no silent cut-off partway down the list')
+    assert.equal(run.imagesConsidered, 9)
+    assert.equal(run.imagesRead, 9)
+  } finally {
+    harness.restore()
+  }
+})
+
+test('a banner that fails to load does not stop the ones after it', async () => {
+  const harness = install()
+  try {
+    // No response configured, so every fetch rejects.
+    const run = await readImages(
+      [remote('https://cdn.x/1.png'), inline('att-1'), remote('https://cdn.x/2.png')],
+      'm1',
+      gmailWith(BIG_BASE64),
+    )
+
+    assert.equal(run.imagesConsidered, 3)
+    assert.equal(run.imagesRead, 1, 'the inline part in the middle still got read')
   } finally {
     harness.restore()
   }

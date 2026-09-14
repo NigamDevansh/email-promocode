@@ -77,7 +77,7 @@ export async function extractOne(messageId: string, deps: BackfillDeps): Promise
   // banner is treated exactly like body text from here on — except that §11
   // keeps every OCR-derived code flagged for review.
   if (deps.ocr && gate.candidates.length === 0) {
-    const images = selectOcrImages(message.payload)
+    const images = selectOcrImages(html, message.payload)
     if (images.length > 0) {
       ocr = await deps.ocr(images, messageId, deps.gmail).catch(() => undefined)
       if (ocr?.text) gate = gateMessage(hydrated, ocr.text)

@@ -701,11 +701,19 @@ Reach for OCR only after link params and alt text have failed.
 | Source | Tracking impact |
 |---|---|
 | Inline `cid:` attachments | **None** — served by Google |
-| Remote CDN images | **Not fetched in this version** — would register an open |
+| Remote CDN images | Registers an open with the sender |
 
-Read only inline Gmail image parts in this version. They are ranked by declared
-size, with template furniture filtered before OCR. Remote image support is
-deferred until the product has an explicit, user-visible permission flow.
+Read every image that could hold a code, inline parts first. Ranking by
+declared size was the original plan and it does not survive contact with real
+mail: ESP banners ship with opaque filenames and no width or height, so there
+is nothing to rank by and a top-two cut is a coin flip. Size is therefore an
+ordering, not a filter — the queue is attempted in full, and the per-message
+time budget is what stops it.
+
+Filter only what is impossible rather than what looks unpromising: template
+furniture matched by name, and images whose markup declares a size below
+200x100. Fetching a sender's banner registers an open; §12 covers why that is
+accepted and where it is disclosed.
 
 Preprocessing is what makes Tesseract usable on banners: flatten alpha onto
 white, upscale 2–3×, grayscale, Otsu threshold, detect polarity so
@@ -948,9 +956,13 @@ display codes. Not acceptable if you add auto-apply at checkout.
 
 ### Request hygiene
 
-- Do not fetch retailer CDNs. OCR reads only Gmail-provided inline image parts,
-  so the extension does not register opens with senders or request blanket host
-  access.
+- Fetch retailer CDNs with credentials omitted and no referrer. No reason to
+  hand them cookies on top of the request itself.
+- Remote image fetches register opens with senders. That is accepted here,
+  because a code rendered into a banner is unreachable otherwise and silently
+  failing to find it is the worse outcome. It is not hidden: the popup carries
+  an ⓘ next to the settings gear stating that reading image coupons downloads
+  the sender's images and that the sender can see it.
 - Never commit `.env`. Rotate the key if it ever lands in git history; scrubbing
   a commit is not the same as the key being unseen.
 

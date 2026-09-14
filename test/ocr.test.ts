@@ -22,6 +22,8 @@ import {
 
 // ---------------------------------------------------------------- image choice
 
+const img = (attrs: string): string => `<img ${attrs}>`
+
 test('template furniture never reaches OCR', () => {
   const payload: GmailPart = {
     mimeType: 'multipart/related',
@@ -30,10 +32,37 @@ test('template furniture never reaches OCR', () => {
       { mimeType: 'image/png', filename: 'hero-banner.png', body: { attachmentId: 'hero', size: 90_000 } },
     ],
   }
-  assert.deepEqual(selectOcrImages(payload).map((image) => image.attachmentId), ['hero'])
+  assert.deepEqual(selectOcrImages('', payload).map((image) => image.attachmentId), ['hero'])
 })
 
-test('only the largest one or two inline images survive, biggest first', () => {
+test('every image is read, not just the two that looked most promising', () => {
+  // The case this rule exists for: opaque CDN filenames, no declared sizes,
+  // nothing to rank by, and the code in whichever one happens to hold it.
+  const html = Array.from({ length: 9 }, (_, index) =>
+    img(`src="https://res2.cdn.example/res/img/${index}A4F12B633572ACB276E3C428.png"`),
+  ).join('')
+
+  const chosen = selectOcrImages(html, undefined)
+
+  assert.equal(chosen.length, 9, 'a size-less banner is still a banner')
+  assert.equal(chosen.every((image) => image.source === 'remote'), true)
+})
+
+test('inline images are read before the sender is ever contacted', () => {
+  const payload: GmailPart = {
+    mimeType: 'multipart/related',
+    parts: [{ mimeType: 'image/png', body: { attachmentId: 'inline-1', size: 90_000 } }],
+  }
+  const html = img('src="https://cdn.example/hero.png" width="600" height="400"')
+
+  assert.deepEqual(
+    selectOcrImages(html, payload).map((image) => image.source),
+    ['inline', 'remote'],
+    'Gmail already served the inline part; it costs the sender nothing',
+  )
+})
+
+test('known sizes order the queue rather than trimming it', () => {
   const payload: GmailPart = {
     mimeType: 'multipart/related',
     parts: [
@@ -43,9 +72,45 @@ test('only the largest one or two inline images survive, biggest first', () => {
     ],
   }
   assert.deepEqual(
-    selectOcrImages(payload).map((image) => image.attachmentId),
-    ['large', 'medium'],
+    selectOcrImages('', payload).map((image) => image.attachmentId),
+    ['large', 'medium', 'small'],
+    'the biggest is tried first, but the smallest is still tried',
   )
+})
+
+test('an image declared too small to hold a code is still excluded', () => {
+  const html = [
+    img('src="https://cdn.example/rule.png" width="54" height="8"'),
+    img('src="https://cdn.example/banner.png" width="600" height="400"'),
+  ].join('')
+
+  assert.deepEqual(
+    selectOcrImages(html, undefined).map((image) => image.url),
+    ['https://cdn.example/banner.png'],
+    'excluding the impossible is not the same as guessing at the promising',
+  )
+})
+
+test('the same banner referenced twice is fetched once', () => {
+  const html = img('src="https://cdn.example/hero.png"').repeat(3)
+  assert.equal(selectOcrImages(html, undefined).length, 1)
+})
+
+test('a pathological image count is capped so one message cannot run away', () => {
+  const html = Array.from({ length: 80 }, (_, index) =>
+    img(`src="https://cdn.example/${index}.png"`),
+  ).join('')
+
+  assert.equal(selectOcrImages(html, undefined).length, 25)
+})
+
+test('non-http sources are ignored', () => {
+  const html = [
+    img('src="cid:banner@mail" width="600" height="400"'),
+    img('src="data:image/png;base64,AAAA" width="600" height="400"'),
+  ].join('')
+
+  assert.deepEqual(selectOcrImages(html, undefined), [])
 })
 
 test('a fetched image too small in bytes is not worth reading', () => {
@@ -175,7 +240,7 @@ test('inline parts rank against each other by bytes', () => {
   }
 
   assert.deepEqual(
-    selectOcrImages(payload).map((image) => image.attachmentId),
+    selectOcrImages('', payload).map((image) => image.attachmentId),
     ['large', 'small'],
   )
 })

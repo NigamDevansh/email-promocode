@@ -1,19 +1,25 @@
-/** An image worth spending OCR on, chosen before anything is fetched or decoded. */
+/** An image that could hold a coupon code, named before anything is fetched. */
 export interface ImageCandidate {
-  /** Inline parts are served by Gmail; the sender is never contacted. */
-  source: 'inline'
-  /** Present when Gmail kept the image in its attachment endpoint. */
+  /**
+   * Inline parts are served by Gmail and tell the sender nothing. Remote ones
+   * are fetched from the sender's own host, which registers an open with them —
+   * the disclosed cost of reading coupons that exist only as pixels.
+   */
+  source: 'inline' | 'remote'
+  /** Inline only: present when Gmail kept the image in its attachment endpoint. */
   attachmentId: string | null
-  /** Base64url bytes when Gmail placed a small image directly in body.data. */
+  /** Inline only: base64url bytes when Gmail put a small image in body.data. */
   data: string | null
+  /** Remote only: the absolute URL the banner is served from. */
+  url: string | null
   width: number | null
   height: number | null
-  /** Gmail does not declare pixel dimensions for inline MIME parts. */
+  /** Declared area in px. Remote only: markup is the only size signal there. */
   pixelArea: number | null
   /** Gmail's declared part size, checked before the attachment is downloaded. */
   byteSize: number | null
-  /** The MIME type Gmail declared for this image. */
-  mimeType: string
+  /** Inline only. A remote image is typed by the response that carries it. */
+  mimeType: string | null
 }
 
 /** Raw pixels handed to preprocessing. */

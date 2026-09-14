@@ -218,11 +218,15 @@ test('without an OCR reader the cascade still completes', async () => {
   assert.deepEqual(await store.listOffers(), [])
 })
 
-test('a remote CDN banner is never read', async () => {
-  const state = reader('USE CODE RAKE25')
-  await scan(IMAGE_ONLY, { ocr: state.ocr })
+test('a remote CDN banner is read, because that is where the code lives', async () => {
+  const state = reader('USE CODE RAKE25 FOR 25% OFF')
+  const store = await scan(IMAGE_ONLY, { ocr: state.ocr })
 
-  assert.equal(state.calls, 0, 'OCR never registers an email open with a sender')
+  assert.equal(state.calls, 1, 'an image-only coupon is unreachable any other way')
+  assert.deepEqual(
+    store.processed.get('m1')?.candidates.map((candidate) => candidate.source),
+    ['ocr'],
+  )
 })
 
 test('an inline banner is read through Gmail', async () => {

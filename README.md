@@ -46,22 +46,36 @@ Gmail's retention the extension falls back to re-listing the rolling window,
 which section 6 treats as routine rather than as an error.
 
 OCR is part of the extraction cascade rather than an option. When the link,
-alt-text and body-text stages find no code, the largest one or two images in
-the message are read with bundled Tesseract and the recovered text re-enters
-candidate detection. A code read this way is always flagged for review, and a
+alt-text and body-text stages find no code, **every** image in the message is
+read with bundled Tesseract and the recovered text re-enters candidate
+detection. A code read this way is always flagged for review, and a
 read the engine was not confident about yields nothing rather than a code that
 would fail at checkout. `npm run vendor:ocr` (run automatically before a build
 and before `npm run dev`) places the engine and language data in
 `public/vendor/tesseract/`; they are roughly 11MB and deliberately not
 committed.
 
-### OCR privacy boundary
+### What OCR costs you
 
-OCR reads only images the sender **inlined into the message**, which Gmail
-serves and which tell the sender nothing. Remote CDN banners are deliberately
-out of scope for now: fetching one can register an email open, and this simple
-extension does not request broad website access for a feature it cannot explain
-or control in its Settings UI.
+Modern promotional email prints the code into a rendered banner more often than
+into text, and those banners carry no usable size attributes — opaque CDN
+filenames, no declared width or height. There is no signal left to pick the
+right one by, so the extension does not try: it reads every image that could
+physically hold a code, largest known size first, until it finds one or spends
+its per-message time budget.
+
+That includes banners hosted by the sender, and **fetching one tells the sender
+the message was opened**. It is the only way to reach a code that exists purely
+as pixels, so the extension makes the trade rather than quietly failing — and
+the ⓘ next to the settings gear in the popup says so in as many words. Requests
+go out with credentials omitted and no referrer, the reading happens on your
+machine, and nothing is uploaded. This is what the broad `https://*/*` host
+permission in the manifest is for: banner hosts cannot be enumerated ahead of
+time.
+
+Two limits keep it from running away: images whose markup declares a size too
+small to hold legible text are skipped, and one message gets 90 seconds of OCR
+before the scan moves on.
 
 ## Requirements
 

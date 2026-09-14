@@ -32,9 +32,28 @@
           <span id="headerStatusText">Your Promotions coupons, ready when you need them.</span>
         </p>
       </div>
-      <button id="settings" class="icon-button" type="button" aria-label="Open Settings" title="Settings">
-        <span class="icon-emoji" aria-hidden="true">⚙️</span>
-      </button>
+      <div class="header-actions">
+        <span class="info">
+          <button
+            id="privacyInfo"
+            class="icon-button"
+            type="button"
+            aria-label="How coupons inside images are read"
+            aria-describedby="privacyNote"
+          >
+            <span class="icon-emoji" aria-hidden="true">ℹ️</span>
+          </button>
+          <span id="privacyNote" class="info-popover" role="tooltip">
+            Coupon codes are often printed inside an email's images. To read them, this
+            extension downloads every image in your promotional mail — including the ones
+            hosted by the sender, which tells them the message was opened. The reading
+            itself happens on your machine, and nothing is uploaded anywhere.
+          </span>
+        </span>
+        <button id="settings" class="icon-button" type="button" aria-label="Open Settings" title="Settings">
+          <span class="icon-emoji" aria-hidden="true">⚙️</span>
+        </button>
+      </div>
     </header>
 
     <main id="main">
