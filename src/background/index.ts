@@ -18,9 +18,11 @@ import { initialCheckpoint, META_KEYS } from '../utils/storage.js'
 import { rollingRefreshIsDue, runWithSyncWatchdog } from '../utils/sync.js'
 import { authStateForError, ReauthRequiredError } from './auth.js'
 import { runBackfillSlice } from './backfill.js'
+import { runIncrementalSlice } from './incremental.js'
 import { chromeTokens, requestAuthToken } from './chrome-tokens.js'
 import { createGmailPort } from './gmail.js'
 import { indexedDbStore } from './idb.js'
+import { readImages } from './ocr.js'
 import { clearApiKey, readSettings, writeSettings } from './settings.js'
 import { readAuthState, writeAuthState } from './state.js'
 import { syncRetryDelay } from './sync-errors.js'
@@ -108,32 +110,47 @@ async function connect(): Promise<PopupResponse> {
 async function runSync(): Promise<SyncProgress> {
   const settings = await readSettings()
   const revision = settingsRevision
-  const result = await runBackfillSlice({
+  const shared = {
     store: indexedDbStore,
     gmail: createGmailPort(gmailDeps),
     now: () => Date.now(),
     shouldContinue: () => revision === settingsRevision,
-    budget: SLICE_BUDGET,
     backfillDays: settings.backfillDays,
+    // §7 phase 7: always part of the cascade, never a setting.
+    ocr: readImages,
     llm: isConfigured(settings)
       ? {
           adapter: adapterFor(settings.provider),
           settings,
           queue: llmQueue,
-          fetchImpl: (...args) => fetch(...args),
+          fetchImpl: (...args: Parameters<typeof fetch>) => fetch(...args),
         }
       : undefined,
+  }
+
+  // §6 step 7: new mail first, then a bounded slice of the older backfill, so
+  // today's coupons never wait behind hundreds of historical messages.
+  const incremental = await runIncrementalSlice({ ...shared, budget: SLICE_BUDGET })
+
+  if (incremental.fullSyncRequired) {
+    // The cursor outlived Gmail's retention. §6 calls the 45-day re-list routine.
+    await indexedDbStore.setMeta(META_KEYS.backfill, undefined)
+  }
+
+  const result = await runBackfillSlice({
+    ...shared,
+    budget: Math.max(0, SLICE_BUDGET - incremental.processed),
   })
   const checkpoint = await indexedDbStore.getMeta<BackfillCheckpoint>(META_KEYS.backfill)
 
   return {
-    processed: result.processed,
+    processed: result.processed + incremental.processed,
     skipped: result.skipped,
     withCandidates: result.withCandidates,
     totalProcessed: checkpoint?.processedCount ?? 0,
-    remaining: result.remaining,
-    nextAttemptAt: result.nextAttemptAt,
-    error: result.error,
+    remaining: result.remaining || incremental.remaining,
+    nextAttemptAt: result.nextAttemptAt ?? incremental.nextAttemptAt,
+    error: result.error ?? incremental.error,
   }
 }
 

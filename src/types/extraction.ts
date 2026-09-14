@@ -1,4 +1,4 @@
-export type CandidateSource = 'link' | 'alt' | 'subject' | 'text'
+export type CandidateSource = 'link' | 'alt' | 'subject' | 'text' | 'ocr'
 
 export interface Candidate {
   /** Exact case as it appears, per §9. */

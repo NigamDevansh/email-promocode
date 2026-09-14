@@ -6,7 +6,6 @@ export interface Settings {
   apiKey: string
   model: string
   backfillDays: number
-  enableOcr: boolean
   fetchRemoteImages: boolean
 }
 

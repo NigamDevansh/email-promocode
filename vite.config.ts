@@ -72,6 +72,7 @@ export default defineConfig(({ mode }) => {
           background: resolve(srcDir, 'background/index.ts'),
           popup: resolve(srcDir, 'popup/index.html'),
           settings: resolve(srcDir, 'settings/index.html'),
+          offscreen: resolve(srcDir, 'offscreen/index.html'),
         },
         output: {
           // The manifest holds literal paths, so entry names must be stable.

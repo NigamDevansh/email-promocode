@@ -13,7 +13,9 @@
     "typecheck": "tsc --noEmit",
     "test": "node --import=tsx --test \"test/**/*.test.ts\"",
     "check": "npm run typecheck && npm test",
-    "extension-id": "node --import=tsx scripts/extension-id.ts"
+    "extension-id": "node --import=tsx scripts/extension-id.ts",
+    "vendor:ocr": "node --import=tsx scripts/vendor-ocr.ts",
+    "prebuild": "npm run vendor:ocr"
   },
   "devDependencies": {
     "@types/chrome": "^0.2.9",
@@ -23,6 +25,7 @@
     "vite": "^8.3.0"
   },
   "dependencies": {
+    "tesseract.js": "^7.0.0",
     "tldts": "^7.4.13"
   }
 }

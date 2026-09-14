@@ -94,3 +94,25 @@ export function extractVisibleText(html: string): string {
     .replace(/\s+/g, ' ')
     .trim()
 }
+
+/**
+ * Every attribute of every matching tag, grouped per tag.
+ *
+ * `attributeValues` above loses which tag a value came from, which is fine for
+ * collecting alt text but useless for choosing an image: the decision needs
+ * src, width, height and class together on the same element.
+ */
+export function extractTagAttributes(html: string, tag: string): Record<string, string>[] {
+  const tags = new RegExp(`<${tag}\\b([^>]*)>`, 'gi')
+  const attribute = /([a-zA-Z_:][-\w:.]*)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/g
+
+  return [...html.matchAll(tags)].map((match) => {
+    const attributes: Record<string, string> = {}
+    for (const found of (match[1] ?? '').matchAll(attribute)) {
+      const name = (found[1] ?? '').toLowerCase()
+      const raw = found[2] ?? found[3] ?? found[4] ?? ''
+      if (name) attributes[name] = decodeEntities(raw).trim()
+    }
+    return attributes
+  })
+}

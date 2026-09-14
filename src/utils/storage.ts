@@ -6,6 +6,7 @@ export const EXTRACTOR_VERSION = 4
 export const META_KEYS = {
   backfill: 'backfill',
   historyId: 'historyId',
+  incremental: 'incremental',
   authState: 'authState',
   lastSync: 'lastSync',
   syncBlocked: 'syncBlocked',

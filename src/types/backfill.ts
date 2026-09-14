@@ -1,5 +1,6 @@
 import type { ExtractionDeps } from './llm.js'
 import type { GmailPort } from './gmail.js'
+import type { ImageCandidate, OcrRun } from './ocr.js'
 import type { OfferRecord, ProcessedRecord, Store } from './storage.js'
 
 export interface BackfillDeps {
@@ -18,7 +19,19 @@ export interface BackfillDeps {
    * extraction stages alone, which is why they need no LLM key at all.
    */
   llm?: ExtractionDeps
+  /**
+   * §7 phase 7. OCR is not a user-facing option; this is injectable only so the
+   * cascade can be tested without an offscreen document. The service worker
+   * always supplies it.
+   */
+  ocr?: OcrReader
 }
+
+export type OcrReader = (
+  candidates: readonly ImageCandidate[],
+  messageId: string,
+  gmail: GmailPort,
+) => Promise<OcrRun>
 
 export interface BackfillResult {
   processed: number

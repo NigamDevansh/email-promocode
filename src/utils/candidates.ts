@@ -215,7 +215,12 @@ function collectFromText(
  * is worth an LLM call. Cheapest signal first: link parameters, then alt text,
  * then body regex.
  */
-export function gateMessage(message: ParsedMessage): GateResult {
+/**
+ * §7: OCR text is a second pass over the same message, so it arrives here as an
+ * extra surface rather than a second gate. Codes found in it carry source
+ * 'ocr', which §11 requires never to be shown without a verify flag.
+ */
+export function gateMessage(message: ParsedMessage, ocrText = ''): GateResult {
   const candidates = new Map<string, Candidate>()
 
   for (const href of extractHrefs(message.html)) {
@@ -235,10 +240,11 @@ export function gateMessage(message: ParsedMessage): GateResult {
   const visible = extractVisibleText(message.html)
   collectFromText(candidates, message.text, 'text')
   collectFromText(candidates, visible, 'text')
+  collectFromText(candidates, ocrText, 'ocr')
 
   // Alt text counts here too: an image-only email whose banner says "use code"
   // must still reach the LLM even when no candidate survives the shape filter.
-  const hasTriggerPhrase = [message.subject, message.text, visible, ...alts].some(
+  const hasTriggerPhrase = [message.subject, message.text, visible, ocrText, ...alts].some(
     (haystack) => triggerOffsets(haystack).length > 0,
   )
 

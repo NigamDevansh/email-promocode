@@ -76,6 +76,44 @@ export function createGmailPort(deps: AuthorizedFetchDeps): GmailPort {
       }
     },
 
+    async getProfileHistoryId() {
+      const profile = await gmailJson<{ historyId?: string }>('/profile', deps)
+      return profile.historyId ?? ''
+    },
+
+    async listHistory({ startHistoryId, pageToken }) {
+      const query = new URLSearchParams({
+        startHistoryId,
+        // §6: new mail, plus mail relabelled into Promotions after arrival.
+        labelId: 'CATEGORY_PROMOTIONS',
+      })
+      query.append('historyTypes', 'messageAdded')
+      query.append('historyTypes', 'labelAdded')
+      if (pageToken) query.set('pageToken', pageToken)
+
+      const page = await gmailJson<{
+        history?: {
+          messagesAdded?: { message?: { id?: string } }[]
+          labelsAdded?: { message?: { id?: string } }[]
+        }[]
+        nextPageToken?: string
+        historyId?: string
+      }>(`/history?${query}`, deps)
+
+      const messageIds = new Set<string>()
+      for (const record of page.history ?? []) {
+        for (const added of [...(record.messagesAdded ?? []), ...(record.labelsAdded ?? [])]) {
+          if (added.message?.id) messageIds.add(added.message.id)
+        }
+      }
+
+      return {
+        messageIds: [...messageIds],
+        nextPageToken: page.nextPageToken ?? null,
+        historyId: page.historyId ?? null,
+      }
+    },
+
     getFull(messageId) {
       const id = encodeURIComponent(messageId)
       return gmailJson<GmailMessage>(`/messages/${id}?format=full`, deps)

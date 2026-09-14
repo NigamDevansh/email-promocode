@@ -5,8 +5,21 @@ import type { OfferRecord } from '../types/storage.js'
 import { brandKeyFor, displayBrand } from './brand.js'
 import { EXTRACTOR_VERSION } from './storage.js'
 
-// Without an LLM, only direct link/alt evidence is strong enough to show.
+/*
+ * Without an LLM, only structured evidence is strong enough to show: a coupon
+ * query parameter or an ESP-generated alt attribute. Anything read out of prose
+ * needs confirmation first — and OCR text is prose that came from pixels, so it
+ * waits with body text rather than jumping ahead of it. §7's cascade agrees:
+ * the OCR branch feeds LLM extraction before anything is stored.
+ */
 const PROMOTABLE: ReadonlySet<CandidateSource> = new Set(['link', 'alt'])
+
+/** §9 `source`: link, text or ocr. Alt and subject candidates read as text. */
+function ocrSourceOf(source: CandidateSource | undefined): OfferRecord['source'] {
+  if (source === 'link') return 'link'
+  if (source === 'ocr') return 'ocr'
+  return 'text'
+}
 
 export function offerKey(offer: Pick<OfferRecord, 'brandKey' | 'normalizedCode'>): string {
   return JSON.stringify([offer.brandKey, offer.normalizedCode])
@@ -40,7 +53,7 @@ export function buildOffers(message: ParsedMessage, candidates: Candidate[]): Of
       appOnly: false,
       categories: [],
       conditions: '',
-      source: candidate.source === 'link' ? 'link' : 'text',
+      source: ocrSourceOf(candidate.source),
       needsReview: candidate.source !== 'link',
       sourceMessageIds: [message.id],
       sourceThreadId: message.threadId,
@@ -120,8 +133,10 @@ export function buildOffersFromExtraction(
     appOnly: offer.appOnly,
     categories: offer.categories,
     conditions: offer.conditions,
-    source: sourceOf.get(offer.normalizedCode) === 'link' ? 'link' : 'text',
-    needsReview: false,
+    source: ocrSourceOf(sourceOf.get(offer.normalizedCode)),
+    // §11: OCR-derived codes always carry needs_review, even once the model has
+    // confirmed them — the model only saw what Tesseract thought it read.
+    needsReview: sourceOf.get(offer.normalizedCode) === 'ocr',
     extractorVersion: EXTRACTOR_VERSION,
     llmProcessed: true,
     sourceMessageIds: [message.id],

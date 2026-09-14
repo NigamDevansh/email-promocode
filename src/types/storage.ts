@@ -1,4 +1,5 @@
 import type { Candidate } from './extraction.js'
+import type { OcrRun } from './ocr.js'
 import type { TokenUsage } from './llm.js'
 import type { ChatTurnRecord } from './chat.js'
 
@@ -18,6 +19,8 @@ export interface ProcessedRecord {
   status: ProcessedStatus
   processedAt: number
   candidates: Candidate[]
+  /** §7 local diagnostics: what the OCR stage contributed, when it ran. */
+  ocr?: OcrRun
   /** Present only when status is 'failed'. */
   error?: string
 }
@@ -67,6 +70,12 @@ export interface BackfillCheckpoint {
   /** True only after a configured LLM completed this whole scan window. */
   llmProcessed?: boolean
   nextAttemptAt: number | null
+  /**
+   * §6: the mailbox revision captured *before* this scan started listing.
+   * Committed as the history cursor once the scan finishes, so mail that
+   * arrived mid-scan is still picked up incrementally rather than missed.
+   */
+  startHistoryId?: string | null
   /** Consecutive page-level transient failures, persisted for exponential backoff. */
   syncAttempts?: number
   /** Attempts per message ID, so one broken message cannot block the scan. */

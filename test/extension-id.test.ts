@@ -31,6 +31,26 @@ test('the packaged extension can call Gmail and every supported LLM provider', (
     'https://api.anthropic.com/*',
     'https://api.openai.com/*',
     'https://generativelanguage.googleapis.com/*',
+    // OCR reads banners hosted on arbitrary retailer CDNs, so the image fetch
+    // cannot be narrowed to a fixed host list. Deliberate and broad: if this
+    // line ever disappears, image-only coupons stop being found.
+    'https://*/*',
   ])
   assert.ok(manifest.permissions?.includes('alarms'), 'background sync needs the alarms permission')
+  assert.ok(
+    manifest.permissions?.includes('offscreen'),
+    'Tesseract needs an offscreen document to spawn its workers',
+  )
+})
+
+test('extension pages may instantiate WebAssembly', () => {
+  const manifest = JSON.parse(readFileSync('manifest.template.json', 'utf8')) as {
+    content_security_policy?: { extension_pages?: string }
+  }
+
+  // Without wasm-unsafe-eval the bundled Tesseract core cannot start at all.
+  assert.match(
+    manifest.content_security_policy?.extension_pages ?? '',
+    /wasm-unsafe-eval/,
+  )
 })

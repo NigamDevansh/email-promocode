@@ -47,6 +47,12 @@ export function externalizedHtmlMessage(id: string, attachmentId: string): Gmail
 }
 
 export interface FakeGmail extends GmailPort {
+  /** Pages of message IDs returned by listHistory, in order. */
+  historyPages: string[][]
+  historyCalls: (string | null)[]
+  profileHistoryId: string
+  /** Set to make listHistory throw, e.g. a 404 for an expired cursor. */
+  historyError: Error | null
   fullCalls: string[]
   listCalls: (string | null)[]
   attachmentCalls: string[]
@@ -62,6 +68,30 @@ export function createFakeGmail(pages: string[][], messages: Map<string, GmailMe
     attachmentCalls: [],
     failing: new Set(),
     attachments: new Map(),
+
+    profileHistoryId: '9000',
+    historyPages: [],
+    historyCalls: [],
+    historyError: null,
+
+    async getProfileHistoryId() {
+      return fake.profileHistoryId
+    },
+
+    async listHistory({ pageToken }) {
+      fake.historyCalls.push(pageToken)
+      if (fake.historyError) throw fake.historyError
+
+      const index = pageToken === null ? 0 : Number(pageToken)
+      const messageIds = fake.historyPages[index] ?? []
+      const hasMore = index + 1 < fake.historyPages.length
+
+      return {
+        messageIds,
+        nextPageToken: hasMore ? String(index + 1) : null,
+        historyId: hasMore ? null : fake.profileHistoryId,
+      }
+    },
 
     async listPage({ pageToken }) {
       fake.listCalls.push(pageToken)

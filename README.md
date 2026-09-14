@@ -33,8 +33,24 @@ The extension currently:
 The popup has no scanning controls. It contains only Connect when Google access
 is absent, a compact background-progress strip, the coupon chat, and a Settings
 gear. The current five-minute refresh re-lists the configured rolling window
-and relies on the completion cache to skip old messages. Gmail history-based
-incremental sync, OCR and the 30-day expired-offer cleanup remain future work.
+and the incremental loop below keeps it cheap. The 30-day expired-offer cleanup
+remains future work.
+
+Each sync walks Gmail's history from the cursor stored by the last full scan,
+processes anything new, and only then spends what is left of its budget on the
+older backfill, so today's coupons never queue behind historical mail. The
+cursor advances only once every discovered message is terminal. When it outlives
+Gmail's retention the extension falls back to re-listing the rolling window,
+which section 6 treats as routine rather than as an error.
+
+OCR is part of the extraction cascade rather than an option. When the link,
+alt-text and body-text stages find no code, the largest one or two images in
+the message are read with bundled Tesseract and the recovered text re-enters
+candidate detection. A code read this way is always flagged for review, and a
+read the engine was not confident about yields nothing rather than a code that
+would fail at checkout. `npm run vendor:ocr` (run automatically before a build)
+places the engine and language data in `public/vendor/tesseract/`; they are
+roughly 11MB and deliberately not committed.
 
 ## Requirements
 

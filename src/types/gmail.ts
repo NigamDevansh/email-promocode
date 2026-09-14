@@ -72,7 +72,26 @@ export interface ParsedMessage {
 }
 
 /** Gmail boundary the backfill runner depends on, so tests need no network. */
+/** One page of §6's incremental history walk. */
+export interface GmailHistoryPage {
+  /** Message IDs added to Promotions since the requested cursor. */
+  messageIds: string[]
+  nextPageToken: string | null
+  /** The mailbox revision this page brings the caller up to. */
+  historyId: string | null
+}
+
 export interface GmailPort {
+  /** Mailbox revision now. Stored after a full sync so history can resume. */
+  getProfileHistoryId(): Promise<string>
+  /**
+   * Changes since `startHistoryId`. Throws GmailApiError 404 when the cursor is
+   * older than Gmail's retention, which §6 treats as routine rather than fatal.
+   */
+  listHistory(options: {
+    startHistoryId: string
+    pageToken: string | null
+  }): Promise<GmailHistoryPage>
   listPage(options: {
     newerThanDays: number
     pageToken: string | null

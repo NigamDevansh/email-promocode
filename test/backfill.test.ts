@@ -337,6 +337,12 @@ test('a run of empty pages cannot spin without bound', { timeout: 5000 }, async 
     budget: 15,
     backfillDays: 45,
     gmail: {
+      async getProfileHistoryId() {
+        return '1'
+      },
+      async listHistory() {
+        return { messageIds: [], nextPageToken: null, historyId: '1' }
+      },
       async listPage() {
         listCalls += 1
         // An empty page that still claims more to come examines no message, so
