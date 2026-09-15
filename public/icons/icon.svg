@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Coupon ticket with sparkle">
+  <rect width="94" height="52" x="14" y="42" fill="#fff" stroke="#243b8f" stroke-width="5" rx="16"/>
+  <path stroke="#243b8f" stroke-dasharray="4 6" stroke-linecap="round" stroke-width="4" d="M47 47v42"/>
+  <path fill="#f6bd42" d="m98 21 4 11 11 4-11 4-4 11-4-11-11-4 11-4 4-11Z"/>
+</svg>

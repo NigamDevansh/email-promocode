@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import type { GmailPart } from '../src/types/gmail.ts'
 import type { OcrResult, RgbaImage } from '../src/types/ocr.ts'
@@ -111,6 +112,31 @@ test('a pathological image count is capped so one message cannot run away', () =
   ).join('')
 
   assert.equal(selectOcrImages(html, undefined).length, 25)
+})
+
+test('every scheme the extractor accepts is one the manifest can fetch', () => {
+  // These two must agree. A banner whose scheme is accepted here but not
+  // granted in host_permissions is not quietly skipped: Chrome blocks the
+  // fetch as a CORS failure, once per image, on every message that has one.
+  const html = [
+    img('src="http://mail.hsbc.com.hk/in/simplypay_app_0726/images/banner.jpg"'),
+    img('src="https://res2.flyai.airindia.com/res/img/banner.png"'),
+  ].join('')
+
+  const schemes = selectOcrImages(html, undefined).map(
+    (image) => new URL(image.url ?? '').protocol,
+  )
+  assert.deepEqual(schemes.sort(), ['http:', 'https:'])
+
+  const manifest = JSON.parse(readFileSync('manifest.template.json', 'utf8')) as {
+    host_permissions?: string[]
+  }
+  for (const scheme of schemes) {
+    assert.ok(
+      manifest.host_permissions?.includes(`${scheme}//*/*`),
+      `${scheme} banners are read but ${scheme}//*/* is not granted`,
+    )
+  }
 })
 
 test('non-http sources are ignored', () => {

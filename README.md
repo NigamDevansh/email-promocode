@@ -1,219 +1,138 @@
 # Inbox Coupon Assistant
 
-A self-hosted Chrome extension that reads your Gmail Promotions category and
-collects coupon codes into a local, searchable list. Local-first: no app
-backend, no hosted service, no telemetry. You supply your own Google OAuth
-client and, from phase 4 onward, your own LLM API key.
+A self-hosted Chrome extension that finds coupons in Gmail Promotions and keeps
+them in a local, searchable list. There is no app backend, analytics, or hosted
+database. You connect your own Google account and optionally add your own LLM
+provider key.
 
-Full design in [COUPON-EXTENSION-DESIGN.md](COUPON-EXTENSION-DESIGN.md).
+For the complete technical plan, see [COUPON-EXTENSION-DESIGN.md](COUPON-EXTENSION-DESIGN.md).
 
-**Status: Phases 1–7 are implemented.** Automated type, unit and build checks
-pass. The final account-level checks still require your real Google client ID,
-Gmail test user and one configured LLM provider key — and the OCR stage in
-particular needs a real Chrome to confirm, since nothing in a Node test suite
-exercises the offscreen document or the Tesseract worker it hosts.
+## How it works
 
-The extension currently:
+```mermaid
+flowchart TD
+    connect[User clicks Connect] --> auth[Google OAuth<br/>gmail.readonly]
+    auth --> worker[[MV3 service worker]]
+    alarm[[Chrome alarm<br/>every 5 minutes]] -. wakes .-> worker
 
-- connects to Gmail with read-only OAuth and immediately starts a background
-  Promotions scan;
-- resumes bounded scan slices through Chrome alarms even when the popup closes,
-  and checks the rolling mail window again every five minutes;
-- decodes Gmail MIME content and extracts coupon candidates from links, image
-  alt text, subjects and body text without a DOM or network parser;
-- displays strong link/alt-text results without an API key and uses Anthropic,
-  OpenAI or Google Gemini to validate and enrich all candidate sources when a
-  provider key is configured;
-- stores processed-message records and deduplicated offers in local IndexedDB;
-- keeps provider settings and the user-supplied API key in local extension
-  storage, while returning only a masked key to the settings page; and
-- answers natural-language questions from the complete active-offer table,
-  rendering validated coupon cards from IndexedDB rather than model-written
-  code strings; and
-- preserves the latest 20 chat turns when the popup closes.
+    worker --> gmail[(Gmail Promotions)]
+    gmail --> parse[Parse MIME email<br/>links • alt text • subject • body]
+    parse --> found{Coupon candidate<br/>found?}
+    found -- Yes --> rules[Local candidate rules]
+    found -- No --> ocr[Local OCR on qualifying images<br/>Optional packs: OCR_LANGUAGES]
+    ocr --> rules
 
-The popup has no scanning controls. It contains only Connect when Google access
-is absent, a compact background-progress strip, the coupon chat, and a Settings
-gear. The current five-minute refresh re-lists the configured rolling window
-and the incremental loop below keeps it cheap. Each sync also removes offers
-whose known expiry is more than 30 days old.
+    rules -- Strong link or alt match --> idb[(Local IndexedDB<br/>offers • processed • sync • chat)]
+    rules -- LLM key configured --> llm[Anthropic • OpenAI • Gemini]
+    llm --> idb
 
-A five-minute wake asks Gmail what changed and nothing more. On an idle mailbox
-that is one `history.list` call returning no records, so no message is listed or
-refetched. The rolling window is only re-listed when there is no usable cursor:
-the first scan, or one whose cursor outlived Gmail's retention.
+    idb --> popup[Popup<br/>ask a question and see matching coupons]
+    popup -. reads local offers .-> idb
 
-Each sync walks Gmail's history from the cursor stored by the last full scan,
-processes anything new, and only then spends what is left of its budget on the
-older backfill, so today's coupons never queue behind historical mail. The
-cursor advances only once every discovered message is terminal. When it outlives
-Gmail's retention the extension falls back to re-listing the rolling window,
-which section 6 treats as routine rather than as an error.
-
-OCR is part of the extraction cascade rather than an option. When the link,
-alt-text and body-text stages find no code, **every** image in the message is
-read with bundled Tesseract and the recovered text re-enters candidate
-detection. A code read this way is always flagged for review, and a
-read the engine was not confident about yields nothing rather than a code that
-would fail at checkout. `npm run vendor:ocr` (run automatically before a build
-and before `npm run dev`) places the engine and language data in
-`public/vendor/tesseract/`; they are roughly 11MB and deliberately not
-committed.
-
-Set `OCR_LANGUAGES` in `.env` to bundle more Tesseract language packs, comma
-separated, using [tessdata_fast](https://github.com/tesseract-ocr/tessdata_fast)
-codes:
-
-```
-OCR_LANGUAGES=eng,hin,fra
+    classDef primaryStyle fill:#dbeafe,stroke:#2563eb,color:#172554
+    classDef workerStyle fill:#ede9fe,stroke:#7c3aed,color:#2e1065
+    classDef localStyle fill:#dcfce7,stroke:#16a34a,color:#14532d
+    classDef optionalStyle fill:#fef3c7,stroke:#d97706,color:#78350f
+    classDef dataStyle fill:#ccfbf1,stroke:#0f766e,color:#134e4a
+    class connect,auth,popup primaryStyle
+    class worker,alarm workerStyle
+    class gmail,parse,found,rules,ocr localStyle
+    class llm optionalStyle
+    class idb dataStyle
 ```
 
-English is always included, because a coupon code is ASCII whatever script
-surrounds it. Each extra pack adds roughly 1-5MB to the built extension: it is
-downloaded at build time, verified against `ocr-languages.lock.json`, and loaded
-by the OCR worker. Dropping a language from the list removes it from the next
-build. Packs come from a pinned tessdata_fast revision, and a language fetched
-for the first time has its digest recorded in the lockfile, which should be
-committed so every build of this repository gets identical language data.
+The popup is only a view. Closing it does not stop a scan. The service worker
+continues through Chrome alarms and uses a saved cursor to pick up new Gmail
+messages without reprocessing everything.
 
-### What OCR costs you
+## Local data
 
-Modern promotional email prints the code into a rendered banner more often than
-into text, and those banners carry no usable size attributes — opaque CDN
-filenames, no declared width or height. There is no signal left to pick the
-right one by, so the extension does not try: it reads every image that could
-physically hold a code, largest known size first, until it finds one or spends
-its per-message time budget.
+All data is stored in Chrome under this extension's own origin:
 
-That includes banners hosted by the sender, and **fetching one tells the sender
-the message was opened**. It is the only way to reach a code that exists purely
-as pixels, so the extension makes the trade rather than quietly failing — and
-the ⓘ next to the settings gear in the popup says so in as many words. Requests
-go out with credentials omitted and no referrer, the reading happens on your
-machine, and nothing is uploaded. This is what the broad `https://*/*` host
-permission in the manifest is for: banner hosts cannot be enumerated ahead of
-time.
+| Location | Stores |
+|---|---|
+| IndexedDB | `offers` (deduplicated coupons), `processed` (message IDs and extraction results), `meta` (sync cursor/retries), `chat` (latest 20 turns) |
+| `chrome.storage.local` | provider, model, and your API key |
 
-Two limits keep it from running away: images whose markup declares a size too
-small to hold legible text are skipped, and one message gets 90 seconds of OCR
-before the scan moves on.
+Raw email bodies and downloaded image files are not stored. OCR text and coupon
+candidates may be stored with the processed-message record so the same email is
+not scanned again. Google manages the OAuth token cache. If you add an LLM key,
+relevant extraction text and chat questions go directly to that provider.
 
-## Requirements
+## Setup
 
-- Node 22.12 or newer (`.nvmrc` pins 24 for local development)
-- Chrome 120 or newer
-- A Google account, and a Google Cloud project you create yourself
+### 1. Get a Google client ID
 
-## Google Cloud setup
+This development build has a fixed extension ID:
 
-This build's extension ID is pinned by the `key` in `manifest.template.json`,
-so it is stable no matter where the folder lives and you do **not** need to load
-the extension first to discover it:
-
-```
+```text
 bjbhbbododfldjjknhanpohghijlgpcc
 ```
 
-1. Open [Google Cloud Console](https://console.cloud.google.com/), create a
-   project (or select one dedicated to this extension), and keep it selected.
-2. Open **APIs & Services → Library**, search for **Gmail API**, open it and
-   click **Enable**.
-3. Open **Google Auth Platform → Branding** and configure the app name plus
-   your support/developer email. Choose **External** unless this is restricted
-   to your own Google Workspace organization.
-4. Open **Google Auth Platform → Data Access**, add
-   `https://www.googleapis.com/auth/gmail.readonly`, and save.
-5. Open **Google Auth Platform → Audience**, leave publishing status as
-   **Testing**, and add the Gmail address you will use under **Test users**.
-6. Open **Google Auth Platform → Clients**, click **Create client**, choose
-   **Chrome Extension**, give it a recognizable name, and enter this extension
-   ID as the Item/Application ID:
+1. In [Google Cloud Console](https://console.cloud.google.com/), create a project.
+2. Enable **Gmail API**.
+3. In **Google Auth Platform**, add app branding and the scope below under
+   **Data Access**:
 
    ```text
-   bjbhbbododfldjjknhanpohghijlgpcc
+   https://www.googleapis.com/auth/gmail.readonly
    ```
 
-7. Click **Create** and copy the generated client ID. It ends in
-   `.apps.googleusercontent.com`.
-8. Copy `.env.example` to `.env` and replace its placeholder:
+4. Under **Audience**, keep it in **Testing** and add your Gmail address as a
+   **Test user**.
+5. Under **Clients**, choose **Create client → Chrome Extension** and paste the
+   extension ID above into **Item ID**.
+6. Copy the resulting client ID into `.env`:
 
    ```dotenv
    GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
    ```
 
-9. Run `npm run build`, load `dist/` from `chrome://extensions`, open the popup
-   and click **Connect Google**.
+Use the **Chrome Extension** client type. There is no client secret for this
+extension.
 
-### There is no client secret
+### 2. Optional: add OCR languages
 
-Choose the **Chrome Extension** client type, not **Web application**. A Chrome
-extension is a public client: anyone can inspect its installed files, so it
-cannot protect a client secret. Google/Chrome authentication for this project
-uses only the client ID and scopes from the manifest through
-`chrome.identity.getAuthToken()`. Do not put a client secret in `.env`, the
-manifest or the TypeScript bundle.
+English is bundled by default. Add extra Tesseract language packs only if your
+Promotions emails need them:
 
-Client IDs are not secrets, but each Chrome Extension client ID is bound to one
-extension ID, so a build with a different ID cannot use it.
+```dotenv
+OCR_LANGUAGES=eng,hin,fra
+```
 
-Because the OAuth app stays in Testing status, authorization for
-`gmail.readonly` expires after seven days. The extension treats that as a
-normal disconnected state and shows Connect again — weekly reconnection is
-expected, not a bug.
+Each added language increases the extension size. Codes come from
+[tessdata_fast](https://github.com/tesseract-ocr/tessdata_fast).
 
-## Build and load
+### 3. Build and load
 
 ```bash
 npm install
 npm run build
 ```
 
-Then in Chrome: `chrome://extensions` → enable **Developer mode** → **Load
-unpacked** → select the generated `dist/` directory.
+In Chrome, open `chrome://extensions`, enable **Developer mode**, choose **Load
+unpacked**, and select `dist/`. Open the extension and click **Connect Google**.
+Add an Anthropic, OpenAI, or Gemini key from the Settings gear only if you want
+LLM validation and chat.
 
-For iterative work use `npm run dev`, which rebuilds on save with readable
-output and source maps. Chrome still needs a manual reload of the extension to
-pick up a new service worker.
+## Keep private
 
-## Scripts
+Keep your development `GOOGLE_CLIENT_ID` in the gitignored `.env` file. A client
+ID alone cannot read your Gmail: the user must still sign in and grant consent.
+But a copied unpacked extension could reuse a committed ID and present your
+OAuth project's consent screen, consuming its quota or harming its reputation.
 
-| Command | What it does |
+Never commit an LLM API key, OAuth token, client secret, or `key.pem`. A
+published Chrome extension will expose its production client ID in its manifest;
+that is normal, but use a separate, production Google Cloud project for it.
+
+## Development
+
+| Command | Purpose |
 |---|---|
-| `npm run dev` | Watch build: readable output, source maps, no minification |
-| `npm run build` | Production build: minified, no source maps |
-| `npm run typecheck` | `tsc --noEmit` — Vite transpiles but never type-checks |
-| `npm test` | Node's built-in test runner over `test/**/*.test.ts` |
-| `npm run check` | Type-check, then tests |
-| `npm run extension-id` | Print the extension ID derived from the pinned key |
+| `npm run dev` | Watch build with source maps |
+| `npm run build` | Production build |
+| `npm run check` | Type-check and run tests |
 
-## Layout
-
-```
-manifest.template.json   committed; dist/manifest.json is generated from it
-vite.config.ts           entry points, manifest generation, mode-dependent output
-key.pem                  private key backing the pinned extension ID — gitignored
-src/background/          service worker: auth, Gmail, message routing
-src/popup/               plain HTML/CSS/TS popup
-src/types/               shared TypeScript-only contracts; no runtime code
-src/utils/               reusable runtime functions; no type contracts
-scripts/extension-id.ts  derives the extension ID from the manifest key
-test/                    node:test suites, no browser and no network
-```
-
-### About `key.pem`
-
-`key.pem` is a local RSA **private key**. Its public half is the long, non-secret
-`"key"` value committed in `manifest.template.json`; Chrome hashes that public
-key to derive the stable development extension ID shown above.
-
-Vite, the unpacked `dist/` build, OAuth and normal development do not read
-`key.pem`. Keep it only if you may later sign and pack a self-hosted `.crx` with
-the same signing identity. It is gitignored, currently permissioned for only
-the local user, and must never be committed or shared. Deleting it does not
-change the unpacked extension ID because the public manifest key remains. The
-ID changes only if that manifest key is replaced.
-
-If the extension is later published through the Chrome Web Store, use the
-public key/ID assigned to that store item for local development and create a
-matching Chrome Extension OAuth client. Do not upload this private PEM as part
-of the extension source or zip.
+Requirements: Node 22.12+, Chrome 120+, a Google account, and a Google Cloud
+project.

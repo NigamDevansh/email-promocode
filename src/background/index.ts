@@ -106,7 +106,7 @@ async function connect(): Promise<PopupResponse> {
   await indexedDbStore.setMeta(META_KEYS.syncBlocked, null)
   await requestRefreshIfDue(true)
   await scheduleSync()
-  void runAutomaticSync()
+  void runAutomaticSync().catch(() => undefined)
   return { ok: true, authState: 'connected' }
 }
 
@@ -200,9 +200,21 @@ async function clearSyncRetryAttempts(): Promise<void> {
 }
 
 async function runAutomaticSync(): Promise<void> {
-  if ((await readAuthState()) !== 'connected') return
-  if (await indexedDbStore.getMeta<string | null>(META_KEYS.syncBlocked)) return
-  const checkpoint = await indexedDbStore.getMeta<BackfillCheckpoint>(META_KEYS.backfill)
+  let checkpoint: BackfillCheckpoint | undefined
+  try {
+    if ((await readAuthState()) !== 'connected') return
+    if (await indexedDbStore.getMeta<string | null>(META_KEYS.syncBlocked)) return
+    checkpoint = await indexedDbStore.getMeta<BackfillCheckpoint>(META_KEYS.backfill)
+  } catch {
+    // Storage was unreadable on this wake — a suspended worker closing its
+    // IndexedDB handle is the usual cause, and the store reopens on the next
+    // call. Defer to the alarm rather than treating it as a blocked sync: this
+    // says nothing about the mailbox, so it must not reach `syncBlocked` and
+    // freeze the extension behind a reconnect.
+    await scheduleSync().catch(() => undefined)
+    return
+  }
+
   if (checkpoint?.nextAttemptAt && checkpoint.nextAttemptAt > Date.now()) {
     await scheduleSync(checkpoint.nextAttemptAt)
     return
@@ -280,7 +292,7 @@ async function updateSettings(patch: Partial<Settings>): Promise<Settings> {
   await indexedDbStore.setMeta(META_KEYS.syncBlocked, null)
   if ((await readAuthState()) === 'connected') {
     await scheduleSync()
-    void runAutomaticSync()
+    void runAutomaticSync().catch(() => undefined)
   }
   return settings
 }
@@ -291,7 +303,7 @@ async function removeApiKey(): Promise<Settings> {
   await indexedDbStore.setMeta(META_KEYS.syncBlocked, null)
   if ((await readAuthState()) === 'connected') {
     await scheduleSync()
-    void runAutomaticSync()
+    void runAutomaticSync().catch(() => undefined)
   }
   return settings
 }
@@ -382,7 +394,7 @@ async function handle(request: PopupRequest): Promise<PopupResponse> {
       if (authState === 'connected') {
         await requestRefreshIfDue()
         await scheduleSync()
-        void runAutomaticSync()
+        void runAutomaticSync().catch(() => undefined)
       }
       return { ok: true, authState }
     }

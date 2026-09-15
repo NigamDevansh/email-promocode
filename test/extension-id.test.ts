@@ -31,10 +31,8 @@ test('the packaged extension can call Gmail and every supported LLM provider', (
     'https://api.anthropic.com/*',
     'https://api.openai.com/*',
     'https://generativelanguage.googleapis.com/*',
-    // Coupons now live inside banners hosted on retailer CDNs that cannot be
-    // enumerated ahead of time. If this line disappears, image-only coupons
-    // stop being found at all.
     'https://*/*',
+    'http://*/*',
   ])
   assert.ok(manifest.permissions?.includes('alarms'), 'background sync needs the alarms permission')
   assert.ok(

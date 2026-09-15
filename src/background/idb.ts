@@ -17,6 +17,15 @@ function promisify<T>(request: IDBRequest<T>): Promise<T> {
   })
 }
 
+/** Resolves when the transaction commits, rejecting if it errors or aborts. */
+function finished(transaction: IDBTransaction, what: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    transaction.oncomplete = () => resolve()
+    transaction.onerror = () => reject(transaction.error)
+    transaction.onabort = () => reject(transaction.error ?? new Error(`${what} aborted`))
+  })
+}
+
 /**
  * All four §9 stores are created up front even though `offers` is written from
  * phase 3 and `chat` from phase 5 — adding them later would need a version
@@ -51,148 +60,181 @@ function openDatabase(): Promise<IDBDatabase> {
   })
 }
 
-let connection: Promise<IDBDatabase> | undefined
-
-/** The worker is restarted often; the handle is cached per worker lifetime. */
-function database(): Promise<IDBDatabase> {
-  connection ??= openDatabase()
-  return connection
+function isDeadConnection(error: unknown): boolean {
+  if (!(error instanceof DOMException)) return false
+  if (error.name === 'AbortError') return true
+  return error.name === 'InvalidStateError' && /database connection is closing/i.test(error.message)
 }
 
-export const indexedDbStore: Store = {
-  async getProcessed(messageId) {
-    const db = await database()
-    const transaction = db.transaction(PROCESSED, 'readonly')
-    return await promisify<ProcessedRecord | undefined>(
-      transaction.objectStore(PROCESSED).get(messageId) as IDBRequest<ProcessedRecord | undefined>,
+export function createIdbStore(open: () => Promise<IDBDatabase> = openDatabase): Store {
+  let connection: Promise<IDBDatabase> | undefined
+
+  /**
+   * The worker is restarted often, so the handle is cached per worker lifetime —
+   * but only for as long as it is alive. `close` and `versionchange` drop it so
+   * the next call opens a new one instead of throwing on a dead one.
+   */
+  function database(): Promise<IDBDatabase> {
+    if (connection) return connection
+
+    const pending = open().then(
+      (db) => {
+        const forget = (): void => {
+          if (connection === pending) connection = undefined
+        }
+        db.onclose = forget
+        db.onversionchange = () => {
+          db.close()
+          forget()
+        }
+        return db
+      },
+      (error: unknown) => {
+        if (connection === pending) connection = undefined
+        throw error
+      },
     )
-  },
 
-  async commitMessage(record, offers) {
-    const db = await database()
-    const transaction = db.transaction([OFFERS, PROCESSED], 'readwrite')
+    connection = pending
+    return pending
+  }
 
-    const done = new Promise<void>((resolve, reject) => {
-      transaction.oncomplete = () => resolve()
-      transaction.onerror = () => reject(transaction.error)
-      transaction.onabort = () => reject(transaction.error ?? new Error('commit aborted'))
-    })
+  async function withTransaction<T>(
+    stores: string | string[],
+    mode: IDBTransactionMode,
+    run: (transaction: IDBTransaction) => Promise<T>,
+  ): Promise<T> {
+    for (let attempt = 0; ; attempt += 1) {
+      const pending = database()
+      const db = await pending
 
-    const offerStore = transaction.objectStore(OFFERS)
-    for (const offer of offers) {
-      // Read-modify-write inside the same transaction. The put is issued from
-      // the success callback, so the transaction is guaranteed still active.
-      const lookup = offerStore.get([offer.brandKey, offer.normalizedCode])
-      lookup.onsuccess = () => {
-        offerStore.put(mergeOffer(lookup.result as OfferRecord | undefined, offer))
+      try {
+        return await run(db.transaction(stores, mode))
+      } catch (error) {
+        if (attempt > 0 || !isDeadConnection(error)) throw error
+        if (connection === pending) connection = undefined
       }
     }
-    transaction.objectStore(PROCESSED).put(record)
+  }
 
-    await done
-  },
+  return {
+    getProcessed(messageId) {
+      return withTransaction(PROCESSED, 'readonly', (transaction) =>
+        promisify<ProcessedRecord | undefined>(
+          transaction.objectStore(PROCESSED).get(messageId) as IDBRequest<
+            ProcessedRecord | undefined
+          >,
+        ),
+      )
+    },
 
-  async listOffers() {
-    const db = await database()
-    const transaction = db.transaction(OFFERS, 'readonly')
-    return await promisify<OfferRecord[]>(
-      transaction.objectStore(OFFERS).getAll() as IDBRequest<OfferRecord[]>,
-    )
-  },
+    commitMessage(record, offers) {
+      return withTransaction([OFFERS, PROCESSED], 'readwrite', async (transaction) => {
+        const done = finished(transaction, 'commit')
 
-  async deleteStaleOffers(extractorVersion, requireLlm) {
-    const db = await database()
-    const transaction = db.transaction(OFFERS, 'readwrite')
-    const done = new Promise<void>((resolve, reject) => {
-      transaction.oncomplete = () => resolve()
-      transaction.onerror = () => reject(transaction.error)
-      transaction.onabort = () => reject(transaction.error ?? new Error('offer cleanup aborted'))
-    })
+        const offerStore = transaction.objectStore(OFFERS)
+        for (const offer of offers) {
+          // Read-modify-write inside the same transaction. The put is issued from
+          // the success callback, so the transaction is guaranteed still active.
+          const lookup = offerStore.get([offer.brandKey, offer.normalizedCode])
+          lookup.onsuccess = () => {
+            offerStore.put(mergeOffer(lookup.result as OfferRecord | undefined, offer))
+          }
+        }
+        transaction.objectStore(PROCESSED).put(record)
 
-    const request = transaction.objectStore(OFFERS).openCursor()
-    request.onsuccess = () => {
-      const cursor = request.result
-      if (!cursor) return
+        await done
+      })
+    },
 
-      const offer = cursor.value as Partial<OfferRecord>
-      if (
-        offer.extractorVersion !== extractorVersion ||
-        (requireLlm && offer.llmProcessed !== true)
-      ) {
-        cursor.delete()
-      }
-      cursor.continue()
-    }
-    await done
-  },
+    listOffers() {
+      return withTransaction(OFFERS, 'readonly', (transaction) =>
+        promisify<OfferRecord[]>(
+          transaction.objectStore(OFFERS).getAll() as IDBRequest<OfferRecord[]>,
+        ),
+      )
+    },
 
-  async deleteExpiredOffers(before) {
-    const db = await database()
-    const transaction = db.transaction(OFFERS, 'readwrite')
-    const done = new Promise<void>((resolve, reject) => {
-      transaction.oncomplete = () => resolve()
-      transaction.onerror = () => reject(transaction.error)
-      transaction.onabort = () => reject(transaction.error ?? new Error('expired-offer cleanup aborted'))
-    })
+    deleteStaleOffers(extractorVersion, requireLlm) {
+      return withTransaction(OFFERS, 'readwrite', async (transaction) => {
+        const done = finished(transaction, 'offer cleanup')
 
-    const expiry = transaction.objectStore(OFFERS).index('expiry')
-    const request = expiry.openCursor(IDBKeyRange.upperBound(before, true))
-    request.onsuccess = () => {
-      const cursor = request.result
-      if (!cursor) return
+        const request = transaction.objectStore(OFFERS).openCursor()
+        request.onsuccess = () => {
+          const cursor = request.result
+          if (!cursor) return
 
-      const offer = cursor.value as OfferRecord
-      // The index is chronological because validated dates are YYYY-MM-DD.
-      if (typeof offer.expiry === 'string' && offer.expiry < before) cursor.delete()
-      cursor.continue()
-    }
-    await done
-  },
+          const offer = cursor.value as Partial<OfferRecord>
+          if (
+            offer.extractorVersion !== extractorVersion ||
+            (requireLlm && offer.llmProcessed !== true)
+          ) {
+            cursor.delete()
+          }
+          cursor.continue()
+        }
+        await done
+      })
+    },
 
-  async listChatTurns() {
-    const db = await database()
-    const transaction = db.transaction(CHAT, 'readonly')
-    const turns = await promisify<ChatTurnRecord[]>(
-      transaction.objectStore(CHAT).getAll() as IDBRequest<ChatTurnRecord[]>,
-    )
-    return turns.sort((left, right) => left.createdAt - right.createdAt)
-  },
+    deleteExpiredOffers(before) {
+      return withTransaction(OFFERS, 'readwrite', async (transaction) => {
+        const done = finished(transaction, 'expired-offer cleanup')
 
-  async replaceChatTurns(turns) {
-    const db = await database()
-    const transaction = db.transaction(CHAT, 'readwrite')
-    const done = new Promise<void>((resolve, reject) => {
-      transaction.oncomplete = () => resolve()
-      transaction.onerror = () => reject(transaction.error)
-      transaction.onabort = () => reject(transaction.error ?? new Error('chat update aborted'))
-    })
+        const expiry = transaction.objectStore(OFFERS).index('expiry')
+        const request = expiry.openCursor(IDBKeyRange.upperBound(before, true))
+        request.onsuccess = () => {
+          const cursor = request.result
+          if (!cursor) return
 
-    const chatStore = transaction.objectStore(CHAT)
-    chatStore.clear()
-    for (const turn of turns) chatStore.put(turn)
-    await done
-  },
+          const offer = cursor.value as OfferRecord
+          // The index is chronological because validated dates are YYYY-MM-DD.
+          if (typeof offer.expiry === 'string' && offer.expiry < before) cursor.delete()
+          cursor.continue()
+        }
+        await done
+      })
+    },
 
-  async getMeta<T>(key: string) {
-    const db = await database()
-    const transaction = db.transaction(META, 'readonly')
-    const row = await promisify<{ key: string; value: T } | undefined>(
-      transaction.objectStore(META).get(key) as IDBRequest<{ key: string; value: T } | undefined>,
-    )
-    return row?.value
-  },
+    async listChatTurns() {
+      const turns = await withTransaction(CHAT, 'readonly', (transaction) =>
+        promisify<ChatTurnRecord[]>(
+          transaction.objectStore(CHAT).getAll() as IDBRequest<ChatTurnRecord[]>,
+        ),
+      )
+      return turns.sort((left, right) => left.createdAt - right.createdAt)
+    },
 
-  async setMeta<T>(key: string, value: T) {
-    const db = await database()
-    const transaction = db.transaction(META, 'readwrite')
+    replaceChatTurns(turns) {
+      return withTransaction(CHAT, 'readwrite', async (transaction) => {
+        const done = finished(transaction, 'chat update')
 
-    const done = new Promise<void>((resolve, reject) => {
-      transaction.oncomplete = () => resolve()
-      transaction.onerror = () => reject(transaction.error)
-      transaction.onabort = () => reject(transaction.error ?? new Error('meta write aborted'))
-    })
+        const chatStore = transaction.objectStore(CHAT)
+        chatStore.clear()
+        for (const turn of turns) chatStore.put(turn)
+        await done
+      })
+    },
 
-    transaction.objectStore(META).put({ key, value })
-    await done
-  },
+    async getMeta<T>(key: string) {
+      const row = await withTransaction(META, 'readonly', (transaction) =>
+        promisify<{ key: string; value: T } | undefined>(
+          transaction.objectStore(META).get(key) as IDBRequest<
+            { key: string; value: T } | undefined
+          >,
+        ),
+      )
+      return row?.value
+    },
+
+    setMeta<T>(key: string, value: T) {
+      return withTransaction(META, 'readwrite', async (transaction) => {
+        const done = finished(transaction, 'meta write')
+        transaction.objectStore(META).put({ key, value })
+        await done
+      })
+    },
+  }
 }
+
+export const indexedDbStore: Store = createIdbStore()
