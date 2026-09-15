@@ -43,6 +43,18 @@ The popup is only a view. Closing it does not stop a scan. The service worker
 continues through Chrome alarms and uses a saved cursor to pick up new Gmail
 messages without reprocessing everything.
 
+## See it in action
+
+Connect Gmail → optionally add an AI key → coupons load in the background → ask
+for a coupon and open its source email.
+
+<p align="center">
+  <a href="docs/images/01-connect-gmail.png"><img src="docs/images/01-connect-gmail.png" width="170" alt="Connect Gmail" /></a>
+  <a href="docs/images/02-configure-ai.png"><img src="docs/images/02-configure-ai.png" width="280" alt="Configure an optional AI provider" /></a>
+  <a href="docs/images/03-background-scan.png"><img src="docs/images/03-background-scan.png" width="170" alt="Coupons loading in the background" /></a>
+  <a href="docs/images/04-coupon-result.png"><img src="docs/images/04-coupon-result.png" width="170" alt="Matching coupon result" /></a>
+</p>
+
 ## Local data
 
 All data is stored in Chrome under this extension's own origin:
