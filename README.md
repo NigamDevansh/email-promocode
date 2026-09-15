@@ -5,8 +5,6 @@ them in a local, searchable list. There is no app backend, analytics, or hosted
 database. You connect your own Google account and optionally add your own LLM
 provider key.
 
-For the complete technical plan, see [COUPON-EXTENSION-DESIGN.md](COUPON-EXTENSION-DESIGN.md).
-
 ## How it works
 
 ```mermaid
